@@ -130,7 +130,7 @@ export const portfolio: PortfolioItem[] = [
       poster: '/portfolio/dell-ad-demo-v1.webp',
       width: 608,
       height: 1080,
-      seconds: 10,
+      seconds: 9,
       hookSeconds: 3,
     },
     bullets: [
