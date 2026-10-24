@@ -1,0 +1,220 @@
+---
+// src/components/Header.astro
+import Logo from './Logo.astro';
+import ThemeToggle from './ThemeToggle.astro';
+import { nav } from '../config/site';
+
+const path = Astro.url.pathname.replace(/\.html$/, '').replace(/\/$/, '') || '/';
+const isCurrent = (href: string) => !href.includes('#') && (href === path || (href !== '/' && path.startsWith(href)));
+---
+
+<header class="site-header">
+  <div class="wrap site-header__inner">
+    <a class="site-header__brand" href="/" aria-label="cirfan, home">
+      <Logo height={32} />
+    </a>
+
+    <nav class="site-nav" id="site-nav" aria-label="Main">
+      <ul class="site-nav__list">
+        {
+          nav.map((item) => (
+            <li>
+              <a class="site-nav__link" href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined}>
+                {item.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <a class="btn btn--primary btn--small site-nav__cta" href="/#brief">Start a project</a>
+    </nav>
+
+    <div class="site-header__tools">
+      <ThemeToggle />
+      <button class="menu-button" type="button" aria-expanded="false" aria-controls="site-nav" data-menu-button>
+        <span class="menu-button__label">Menu</span>
+        <span class="menu-button__icon" aria-hidden="true"><span></span><span></span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: var(--bg);
+    border-bottom: 1px solid transparent;
+  }
+
+  /* Hairline appears once the page scrolls (progressive enhancement, no JS). */
+  @supports (animation-timeline: scroll()) {
+    .site-header {
+      animation: header-rule linear both;
+      animation-timeline: scroll(root);
+      animation-range: 0 120px;
+    }
+    @keyframes header-rule {
+      to {
+        border-bottom-color: var(--line);
+      }
+    }
+  }
+  @supports not (animation-timeline: scroll()) {
+    .site-header {
+      border-bottom-color: var(--line);
+    }
+  }
+
+  .site-header__inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    min-height: var(--header-h);
+  }
+
+  .site-header__brand {
+    display: inline-flex;
+    margin-right: auto;
+    text-decoration: none;
+    border-radius: var(--radius-s);
+  }
+
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .site-nav__list {
+    display: flex;
+    gap: var(--space-6);
+    list-style: none;
+  }
+
+  .site-nav__link {
+    position: relative;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--ink-2);
+    transition: color 0.2s var(--ease-out);
+  }
+  .site-nav__link:hover,
+  .site-nav__link[aria-current='page'] {
+    color: var(--ink);
+  }
+  .site-nav__link[aria-current='page']::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -0.35rem;
+    height: 1px;
+    background: var(--mark);
+  }
+
+  .site-header__tools {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    order: 3;
+  }
+
+  .site-header__tools :global(.theme-toggle) {
+    visibility: hidden;
+  }
+  :global(.js) .site-header__tools :global(.theme-toggle) {
+    visibility: visible;
+  }
+
+  .menu-button {
+    display: none;
+    align-items: center;
+    gap: var(--space-3);
+    min-height: 2.75rem;
+    padding: 0 0.25rem;
+    border: 0;
+    background: none;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .menu-button__icon {
+    display: grid;
+    gap: 5px;
+    width: 18px;
+  }
+  .menu-button__icon span {
+    display: block;
+    height: 1px;
+    background: currentColor;
+    transition: transform 0.35s var(--ease);
+  }
+  .menu-button[aria-expanded='true'] .menu-button__icon span:first-child {
+    transform: translateY(3px) rotate(45deg);
+  }
+  .menu-button[aria-expanded='true'] .menu-button__icon span:last-child {
+    transform: translateY(-3px) rotate(-45deg);
+  }
+
+  @media (max-width: 52rem) {
+    .site-header__inner {
+      gap: var(--space-4);
+    }
+    :global(.js) .menu-button {
+      display: inline-flex;
+    }
+    :global(.js) .site-nav {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--space-6);
+      padding: var(--space-6) var(--gutter) var(--space-7);
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
+      visibility: hidden;
+      opacity: 0;
+      transform: translateY(-0.5rem);
+      transition:
+        opacity 0.3s var(--ease-out),
+        transform 0.3s var(--ease-out),
+        visibility 0s linear 0.3s;
+    }
+    :global(.js) .site-nav.is-open {
+      visibility: visible;
+      opacity: 1;
+      transform: none;
+      transition:
+        opacity 0.3s var(--ease-out),
+        transform 0.3s var(--ease-out);
+    }
+    :global(.js) .site-nav__list {
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+    :global(.js) .site-nav__link {
+      font-family: var(--font-display);
+      font-size: var(--fs-xl);
+      font-weight: 450;
+      color: var(--ink);
+    }
+    :global(.js) .site-nav__link[aria-current='page']::after {
+      display: none;
+    }
+    /* Without JS the menu stays inline and wraps. */
+    :global(html:not(.js)) .site-header__inner {
+      flex-wrap: wrap;
+      padding-block: var(--space-3);
+    }
+    :global(html:not(.js)) .site-nav {
+      order: 4;
+      width: 100%;
+      flex-wrap: wrap;
+    }
+  }
+</style>

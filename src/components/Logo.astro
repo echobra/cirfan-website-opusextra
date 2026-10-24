@@ -1,0 +1,32 @@
+---
+// src/components/Logo.astro
+// The logo PNGs live in /public. logo.png is for light backgrounds, logo-on-dark.png for dark ones.
+// Only the one matching the current theme is shown.
+interface Props {
+  height?: number;
+  class?: string;
+}
+const { height = 34, class: className = '' } = Astro.props;
+// Source PNGs are 1170 x 360 (aspect 3.25).
+const width = Math.round(height * 3.25);
+---
+
+<span class:list={['logo', className]}>
+  <img class="logo__img logo__img--light" src="/logo.png" width={width} height={height} alt="cirfan" decoding="async" />
+  <img class="logo__img logo__img--dark" src="/logo-on-dark.png" width={width} height={height} alt="cirfan" decoding="async" />
+</span>
+
+<style>
+  .logo {
+    display: inline-flex;
+  }
+  .logo__img {
+    height: auto;
+  }
+  .logo__img--light {
+    display: var(--logo-light);
+  }
+  .logo__img--dark {
+    display: var(--logo-dark);
+  }
+</style>

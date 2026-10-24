@@ -1,0 +1,397 @@
+---
+// src/components/Player.astro
+// 9:16 ad player used in the hero, on the home page and on /work.
+// Plays muted when on screen, pauses when off screen, never autoplays for visitors who ask for reduced motion
+// or have data saver on. Without JavaScript the browser's own controls are shown instead.
+import type { VideoMedia } from '../data/portfolio';
+
+interface Props {
+  media: VideoMedia;
+  title: string;
+  label: string;
+  variant?: 'hero' | 'card';
+}
+
+const { media, title, label, variant = 'card' } = Astro.props;
+const isHero = variant === 'hero';
+const hook = media.hookSeconds ?? 0;
+---
+
+<figure class:list={['player', `player--${variant}`]} data-player data-title={title}>
+  <div class="player__stage">
+    {
+      isHero && (
+        <>
+          <span class="dim dim--w" aria-hidden="true">
+            <span class="dim__label">9</span>
+          </span>
+          <span class="dim dim--h" aria-hidden="true">
+            <span class="dim__label">16</span>
+          </span>
+        </>
+      )
+    }
+
+    <div class="player__screen">
+      <video
+        class="player__video"
+        width={media.width}
+        height={media.height}
+        poster={media.poster}
+        preload={isHero ? 'metadata' : 'none'}
+        aria-label={label}
+        controlslist="nodownload noplaybackrate"
+        disablepictureinpicture
+        muted
+        loop
+        playsinline
+        controls
+      >
+        <source src={media.src} type="video/mp4" />
+      </video>
+      {
+        isHero && (
+          <div class="safezone" aria-hidden="true">
+            <span class="safezone__label">Reels safe zone</span>
+          </div>
+        )
+      }
+    </div>
+
+    <div class="player__bar">
+      <button class="player__btn" type="button" data-play aria-label={`Play ${title}`}>
+        <svg class="icon icon--play" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false">
+          <path d="M6 3.8v12.4L16 10z" fill="currentColor"></path>
+        </svg>
+        <svg class="icon icon--pause" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true" focusable="false">
+          <path d="M5.5 4h3v12h-3zM11.5 4h3v12h-3z" fill="currentColor"></path>
+        </svg>
+      </button>
+
+      <div class="tape" data-tape data-seconds={media.seconds} data-hook={hook} aria-hidden="true">
+        {hook > 0 && <span class="tape__hook"><span class="tape__hook-label">Hook</span></span>}
+        <span class="tape__ticks"></span>
+        <span class="tape__fill" data-tape-fill></span>
+      </div>
+
+      <button class="player__btn" type="button" data-sound aria-pressed="false" aria-label="Turn sound on">
+        <svg class="icon icon--muted" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
+          <path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor"></path>
+          <path d="M13 7.5l4 5M17 7.5l-4 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+        </svg>
+        <svg class="icon icon--sound" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" focusable="false">
+          <path d="M3 7.5h3l4-3.5v12l-4-3.5H3z" fill="currentColor"></path>
+          <path d="M13.2 7.2a4 4 0 0 1 0 5.6M15.4 5a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+  <slot />
+</figure>
+
+<style>
+  .player {
+    --dim: 0px;
+    --screen-w: 100%;
+    margin: 0;
+  }
+  .player--hero {
+    --dim: 2.25rem;
+  }
+
+  .player__stage {
+    display: grid;
+    grid-template-columns: var(--dim) minmax(0, 1fr);
+    grid-template-rows: var(--dim) auto auto;
+  }
+
+  .player__screen {
+    position: relative;
+    grid-column: 2;
+    grid-row: 2;
+    overflow: hidden;
+    border-radius: var(--radius-m);
+    background: var(--bg-sunk);
+    box-shadow: 0 0 0 1px var(--line);
+    cursor: pointer;
+  }
+  :global(html:not(.js)) .player__screen {
+    cursor: auto;
+  }
+
+  .player__video {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 9 / 16;
+    object-fit: cover;
+    background: var(--bg-sunk);
+  }
+
+  /* ---------- Dimension lines (hero only) ---------- */
+  .dim {
+    position: relative;
+    display: grid;
+    place-items: center;
+    color: var(--mark);
+  }
+  .dim--w {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .dim--h {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .dim::before {
+    content: '';
+    position: absolute;
+    border-color: currentColor;
+    border-style: solid;
+  }
+  .dim--w::before {
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 9px;
+    margin-top: -4px;
+    border-width: 0 1px;
+    background: linear-gradient(currentColor, currentColor) center / 100% 1px no-repeat;
+    transform-origin: center;
+  }
+  .dim--h::before {
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 9px;
+    margin-left: -4px;
+    border-width: 1px 0;
+    background: linear-gradient(currentColor, currentColor) center / 1px 100% no-repeat;
+    transform-origin: center;
+  }
+  .dim__label {
+    position: relative;
+    padding: 0 0.45rem;
+    background: var(--bg);
+    font-family: var(--font-display);
+    font-size: var(--fs-lg);
+    line-height: 1;
+    color: var(--mark);
+  }
+
+  /* ---------- Safe zone overlay (hero only) ---------- */
+  .safezone {
+    position: absolute;
+    inset: 14% 6% 35% 6%;
+    border: 1px dashed rgb(255 255 255 / 0.85);
+    border-radius: 2px;
+    box-shadow: 0 0 0 9999px rgb(10 17 32 / 0.38);
+    pointer-events: none;
+    opacity: 0;
+  }
+  .safezone__label {
+    position: absolute;
+    left: -1px;
+    top: 0;
+    transform: translateY(-100%);
+    padding: 0.2rem 0.45rem;
+    background: rgb(10 17 32 / 0.72);
+    color: #fff;
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    line-height: 1.3;
+    border-radius: 2px 2px 0 0;
+    white-space: nowrap;
+  }
+  .player.safezone-on .safezone {
+    opacity: 1;
+    animation: none;
+  }
+  .player.safezone-off .safezone {
+    opacity: 0;
+    animation: none;
+  }
+  .safezone {
+    transition: opacity 0.4s var(--ease-out);
+  }
+
+  /* ---------- Control bar and tape timeline ---------- */
+  .player__bar {
+    grid-column: 2;
+    grid-row: 3;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: end;
+    gap: var(--space-4);
+    padding-top: var(--space-4);
+  }
+  :global(html:not(.js)) .player__bar {
+    display: none;
+  }
+
+  .player__btn {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    transition:
+      border-color 0.2s var(--ease-out),
+      background-color 0.2s var(--ease-out),
+      color 0.2s var(--ease-out);
+  }
+  .player__btn:hover {
+    border-color: var(--ink);
+  }
+  .player__btn .icon--pause,
+  .player__btn .icon--sound {
+    display: none;
+  }
+  .player.is-playing .icon--play,
+  .player.is-unmuted .icon--muted {
+    display: none;
+  }
+  .player.is-playing .icon--pause,
+  .player.is-unmuted .icon--sound {
+    display: block;
+  }
+  .player.is-unmuted [data-sound] {
+    background: var(--btn-bg);
+    color: var(--btn-ink);
+    border-color: var(--btn-bg);
+  }
+
+  .tape {
+    --seconds: 10;
+    --hook: 3;
+    position: relative;
+    height: 2.5rem;
+    color: var(--line-strong);
+  }
+  .tape__ticks {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 10px;
+    border-right: 1px solid currentColor;
+    background:
+      linear-gradient(currentColor, currentColor) bottom / 100% 1px no-repeat,
+      repeating-linear-gradient(to right, currentColor 0 1px, transparent 1px calc(100% / var(--seconds))) bottom / 100% 10px no-repeat,
+      repeating-linear-gradient(to right, currentColor 0 1px, transparent 1px calc(100% / var(--seconds) / 2)) bottom / 100% 5px no-repeat;
+  }
+  .tape__fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: var(--mark);
+    transform: scaleX(0);
+    transform-origin: left center;
+    will-change: transform;
+  }
+  .tape__hook {
+    position: absolute;
+    left: 0;
+    top: 0.2rem;
+    width: calc(var(--hook) / var(--seconds) * 100%);
+    height: 0.95rem;
+    border: 1px solid var(--mark);
+    border-bottom: 0;
+    color: var(--mark);
+  }
+  .tape__hook-label {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    transform: translate(-50%, -55%);
+    padding: 0 0.35rem;
+    background: var(--bg);
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  /* ---------- Hero entrance: the frame is drafted like a pattern. One orchestrated moment. ---------- */
+  @media (prefers-reduced-motion: no-preference) {
+    .player--hero .player__screen {
+      animation: screen-in 0.9s var(--ease-out) 0.1s both;
+    }
+    .player--hero .dim::before {
+      animation: draw-x 0.8s var(--ease) 0.55s both;
+    }
+    .player--hero .dim--h::before {
+      animation-name: draw-y;
+    }
+    .player--hero .dim__label {
+      animation: fade 0.5s var(--ease-out) 1.15s both;
+    }
+    .player--hero .tape__ticks {
+      animation: wipe 1s var(--ease) 0.9s both;
+    }
+    .player--hero .tape__hook {
+      animation: fade 0.5s var(--ease-out) 1.6s both;
+    }
+    .player--hero .safezone {
+      animation: safezone-intro 4.4s var(--ease-out) 1.4s both;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .player--hero .safezone {
+      animation: none;
+    }
+  }
+
+  @keyframes screen-in {
+    from {
+      opacity: 0;
+      transform: scale(0.985);
+    }
+  }
+  @keyframes draw-x {
+    from {
+      transform: scaleX(0);
+    }
+  }
+  @keyframes draw-y {
+    from {
+      transform: scaleY(0);
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+  @keyframes wipe {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+  @keyframes safezone-intro {
+    0% {
+      opacity: 0;
+      clip-path: inset(0 0 100% 0);
+    }
+    18% {
+      opacity: 1;
+      clip-path: inset(0 0 0 0);
+    }
+    78% {
+      opacity: 1;
+      clip-path: inset(0 0 0 0);
+    }
+    100% {
+      opacity: 0;
+      clip-path: inset(0 0 0 0);
+    }
+  }
+</style>

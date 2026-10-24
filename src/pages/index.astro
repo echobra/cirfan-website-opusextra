@@ -1,0 +1,769 @@
+---
+// src/pages/index.astro
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Player from '../components/Player.astro';
+import WorkItem from '../components/WorkItem.astro';
+import { site, briefMailto } from '../config/site';
+import { featured, portfolio } from '../data/portfolio';
+
+const hero = portfolio.find((item) => item.slug === 'city-run') ?? portfolio[0];
+const heroMedia = hero.media.kind === 'video' ? hero.media : null;
+
+const pains = [
+  {
+    title: 'Prompt engineering',
+    problem: 'Usable AI output takes structured prompts, reference images, and a long trail of rejected takes.',
+    answer: 'You describe the ad in plain words. The prompting is our job.',
+  },
+  {
+    title: 'Keeping up with new models',
+    problem: 'New image and video models ship constantly, and each one is better at something different: faces, products, motion, text.',
+    answer: 'Knowing which model does what is part of our daily work. You get the result, not the research.',
+  },
+  {
+    title: 'Consistency',
+    problem: 'One good render is easy. A full set that keeps the same face, product, and light across every variation is not.',
+    answer: 'Each set is built from shared references and settings, so your ads look like one brand instead of twenty experiments.',
+  },
+  {
+    title: 'Video ads that don’t convert',
+    problem: 'A beautiful ad that doesn’t sell is an expensive one.',
+    answer:
+      'We study your best-performing creatives and their lifetime metrics to learn which styles, hooks, and calls to action your audience responds to. We don’t promise results. We give your next ads a starting point grounded in your own data.',
+  },
+];
+
+const steps = [
+  {
+    title: 'Measure',
+    text: 'Send your best-performing creatives with their lifetime metrics: spend, hook rate, click-through rate, cost per result. They show which styles, hooks, and calls to action already work for you.',
+  },
+  {
+    title: 'Reference',
+    text: 'Optional, and strongly recommended if you want to improve on what you have. Share a few competitor ads you admire or want to beat.',
+  },
+  {
+    title: 'Draft',
+    text: 'We write, generate, and edit the creatives. Every draft is watermarked.',
+  },
+  {
+    title: 'Review',
+    text: 'Inspect every draft closely before paying, and tell us what needs adjusting.',
+  },
+  {
+    title: 'Deliver',
+    text: 'Once you’re satisfied and payment clears, the watermark comes off and you receive the final files. All rights transfer to you.',
+  },
+];
+
+const terms = [
+  {
+    title: 'No guarantees',
+    text: 'We don’t guarantee sales, revenue, or ad performance. Results also depend on your offer, targeting, budget, and each platform.',
+    href: '/policies/no-guarantees',
+    linkLabel: 'No guarantees policy',
+  },
+  {
+    title: 'Watermarks',
+    text: 'Drafts carry a watermark. It comes off once you’re satisfied and payment succeeds, which grants you commercial use.',
+    href: '/policies/watermarks',
+    linkLabel: 'Watermark policy',
+  },
+  {
+    title: 'Ownership',
+    text: 'Everything we generate stays ours until full payment. Then all rights in the final delivered assets transfer to you.',
+    href: '/policies/ip-ownership',
+    linkLabel: 'IP ownership policy',
+  },
+  {
+    title: 'Refunds',
+    text: 'No refunds. You inspect every draft before paying, which is exactly why drafts are watermarked.',
+    href: '/policies/refunds',
+    linkLabel: 'Refund policy',
+  },
+  {
+    title: 'AI disclosure',
+    text: 'You decide how the media is used. For realistic content we strongly recommend an AI disclosure. You never need to mention cirfan.',
+    href: '/policies/ai-disclosure',
+    linkLabel: 'AI disclosure policy',
+  },
+];
+
+const faqs = [
+  {
+    q: 'Do I need to know anything about AI?',
+    a: 'No. If you can describe the ad you want and share what has worked before, that’s enough. The tools, prompts, and models are our side of the work.',
+  },
+  {
+    q: 'Will my ads look like the demos?',
+    a: 'Only in craft. The demos show styles we produce. Your ads are built around your product, your brand, and your data.',
+  },
+  {
+    q: 'Do you make image ads too?',
+    a: 'Yes. Image and video ad creatives are the only thing we make.',
+  },
+  {
+    q: 'Do I have to say you made the ads?',
+    a: 'No. You never need to disclose working with cirfan. For highly realistic content we do recommend disclosing that it was made with AI.',
+  },
+  {
+    q: 'How is pricing set?',
+    a: 'Each project is quoted after we read your brief, because scope depends on the number of creatives, formats, and styles.',
+  },
+];
+
+const briefFields = [
+  { label: 'Brand and product', hint: 'Name, website, and what you sell.' },
+  { label: 'Best-performing creatives', hint: 'The ads that have worked best for you.' },
+  { label: 'Lifetime metrics', hint: 'Spend, hook rate, click-through rate, and cost per result for each.' },
+  { label: 'Competitor references', hint: 'Optional. A few ads you admire or want to beat.' },
+  { label: 'Placements', hint: 'Where the ads will run, for example Meta, TikTok, or YouTube.' },
+];
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    '@id': `${site.url}/#organization`,
+    name: 'cirfan',
+    alternateName: 'cirfan.com',
+    url: site.url,
+    logo: `${site.url}/logo.png`,
+    email: site.email,
+    description: site.description,
+    founder: { '@type': 'Person', name: site.owner, url: `${site.url}/about` },
+    knowsAbout: ['AI video ads', 'AI image ads', 'UGC video ads', 'Ad creative production'],
+    sameAs: Object.values(site.social).filter(Boolean),
+  },
+  {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': `${site.url}/#website`,
+    name: 'cirfan',
+    url: site.url,
+    publisher: { '@id': `${site.url}/#organization` },
+  },
+];
+---
+
+<BaseLayout
+  title="cirfan | AI image and video ad creatives, made to measure"
+  description="cirfan makes AI image and video ad creatives for brands, built from your best-performing ads and their metrics. No prompting, no tool learning curve."
+  jsonLd={jsonLd}
+  preloadImage={heroMedia?.poster}
+>
+  <!-- Hero -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap hero__grid">
+      <div class="hero__copy">
+        <h1 id="hero-title" class="hero__title">Ad creatives, made to measure.</h1>
+        <p class="hero__lede">
+          cirfan makes AI image and video ads, and nothing else. We start from your best-performing creatives and their
+          numbers, then build new ads around what already works for your audience.
+        </p>
+        <div class="hero__actions">
+          <a class="btn btn--primary" href="#brief">Start a project</a>
+          <a class="link" href="#work">See the work</a>
+        </div>
+      </div>
+
+      {
+        heroMedia && (
+          <div class="hero__frame">
+            <Player media={heroMedia} title={hero.title} label={`${hero.title}, cinematic demo ad by cirfan`} variant="hero">
+              <figcaption class="hero__caption">
+                <span>Cinematic demo, watermarked. adidas appears as a visual reference only.</span>
+                <button class="chip" type="button" data-safezone aria-pressed="false">
+                  Show safe zone
+                </button>
+              </figcaption>
+            </Player>
+          </div>
+        )
+      }
+    </div>
+  </section>
+
+  <!-- Pain points -->
+  <section class="section pains" id="why" aria-labelledby="pains-title">
+    <div class="wrap">
+      <h2 id="pains-title" class="pains__statement">
+        Every hour spent wrestling with AI tools is an hour not spent on product, customers, operations, or sales.
+      </h2>
+      <p class="lede pains__lede">
+        Founders want ads that sell, not a second career as prompt engineers or AI video producers. These are the parts
+        we take off your plate.
+      </p>
+
+      <div class="pains__grid">
+        {
+          pains.map((p) => (
+            <div class="pain">
+              <h3 class="pain__title">{p.title}</h3>
+              <p class="pain__problem">{p.problem}</p>
+              <p class="pain__answer">{p.answer}</p>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Selected work -->
+  <section class="section work" id="work" aria-labelledby="work-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="work-title">Selected work</h2>
+        <p class="lede">Two demos in two styles, one cinematic and one UGC.</p>
+        <p class="notice">
+          <strong>Demos, not final cuts.</strong> They show range, not finished client work. Every ad is adjusted to the
+          client’s brand, product, and needs before delivery.
+        </p>
+      </div>
+
+      <div class="work__list">
+        {featured.map((item, i) => <WorkItem item={item} variant="feature" flip={i % 2 === 1} />)}
+      </div>
+
+      <div class="work__foot">
+        <p class="small-print">
+          Both demos carry a moving watermark to discourage use, abuse, replication, or duplication.
+        </p>
+        <a class="btn btn--outline btn--small" href="/work">Explore the portfolio</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Process -->
+  <section class="section process" id="process" aria-labelledby="process-title">
+    <div class="wrap process__grid">
+      <div class="process__head">
+        <h2 id="process-title">From your numbers to a finished ad</h2>
+        <p class="lede">One person handles every step, from your brief to the final file.</p>
+      </div>
+      <ol class="steps">
+        {
+          steps.map((step, i) => (
+            <li class="step">
+              <span class="step__num" aria-hidden="true">
+                {i + 1}
+              </span>
+              <h3 class="step__title">{step.title}</h3>
+              <p class="step__text">{step.text}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <!-- Terms -->
+  <section class="section terms" id="terms" aria-labelledby="terms-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="terms-title">Terms, in plain words</h2>
+        <p class="lede">Worth reading before we start. Each one links to the full policy.</p>
+      </div>
+      <dl class="terms__list">
+        {
+          terms.map((t) => (
+            <div class="term">
+              <dt class="term__title">{t.title}</dt>
+              <dd class="term__text">
+                {t.text}{' '}
+                <a class="term__link" href={t.href}>
+                  {t.linkLabel}
+                </a>
+              </dd>
+            </div>
+          ))
+        }
+      </dl>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section faq" id="questions" aria-labelledby="faq-title">
+    <div class="wrap faq__grid">
+      <h2 id="faq-title" class="faq__title">Questions</h2>
+      <div class="faq__list">
+        {
+          faqs.map((f) => (
+            <details class="faq__item">
+              <summary class="faq__q">
+                <span>{f.q}</span>
+                <span class="faq__icon" aria-hidden="true" />
+              </summary>
+              <p class="faq__a">{f.a}</p>
+            </details>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Brief -->
+  <section class="section brief" id="brief" aria-labelledby="brief-title">
+    <div class="wrap brief__grid">
+      <div class="brief__head">
+        <h2 id="brief-title">Start with a brief</h2>
+        <p class="lede">Email the details on this card. We’ll reply with questions or a quote.</p>
+        <div class="brief__contact">
+          <a class="link brief__email" href={`mailto:${site.email}`}>{site.email}</a>
+          <button class="btn btn--outline btn--small" type="button" data-copy={site.email} aria-describedby="copy-status">
+            <span data-copy-label>Copy address</span>
+          </button>
+          <span id="copy-status" class="visually-hidden" role="status" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <div class="brief__card">
+        <p class="brief__card-title">Brief</p>
+        <dl class="brief__fields">
+          {
+            briefFields.map((f) => (
+              <div class="brief__field">
+                <dt>{f.label}</dt>
+                <dd>{f.hint}</dd>
+              </div>
+            ))
+          }
+        </dl>
+        <a class="btn btn--primary brief__send" href={briefMailto}>Email your brief</a>
+        <p class="small-print">Opens your email app with these headings filled in.</p>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  /* ---------- Hero ---------- */
+  .hero {
+    padding-block: clamp(2.5rem, 1rem + 5vw, 5.5rem) clamp(4rem, 2rem + 5vw, 7rem);
+  }
+  .hero + :global(.section) {
+    border-top: 1px solid var(--line);
+  }
+  .hero__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-8) clamp(2rem, 7vw, 8rem);
+  }
+  .hero__title {
+    max-width: 9.5ch;
+    font-size: var(--fs-hero);
+    font-weight: 440;
+    line-height: 0.97;
+    letter-spacing: -0.025em;
+  }
+  .hero__lede {
+    max-width: 34rem;
+    margin-top: var(--space-6);
+    font-size: var(--fs-lg);
+    line-height: 1.5;
+    color: var(--ink-2);
+  }
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4) var(--space-6);
+    margin-top: var(--space-7);
+  }
+  .hero__frame {
+    width: calc(clamp(14.5rem, 9rem + 14vw, 22rem) + 2.25rem);
+  }
+  .hero__caption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+    margin-left: 2.25rem;
+    font-size: var(--fs-xs);
+    line-height: 1.45;
+    color: var(--ink-3);
+  }
+  .hero__caption span {
+    max-width: 17rem;
+  }
+
+  .chip {
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: transparent;
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    color: var(--ink);
+    cursor: pointer;
+    transition:
+      background-color 0.2s var(--ease-out),
+      color 0.2s var(--ease-out),
+      border-color 0.2s var(--ease-out);
+  }
+  .chip:hover {
+    border-color: var(--ink);
+  }
+  .chip[aria-pressed='true'] {
+    background: var(--btn-bg);
+    border-color: var(--btn-bg);
+    color: var(--btn-ink);
+  }
+  :global(html:not(.js)) .chip {
+    display: none;
+  }
+
+  @media (max-width: 52rem) {
+    .hero__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .hero__frame {
+      justify-self: center;
+      width: min(100%, 20rem);
+    }
+  }
+
+  /* ---------- Pains ---------- */
+  .pains__statement {
+    max-width: 22ch;
+    font-size: var(--fs-3xl);
+    line-height: 1.06;
+  }
+  .pains__lede {
+    margin-top: var(--space-6);
+  }
+  .pains__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-8) clamp(2rem, 6vw, 6rem);
+    margin-top: var(--space-8);
+  }
+  .pain {
+    display: grid;
+    align-content: start;
+    gap: var(--space-4);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--line-strong);
+  }
+  .pain__title {
+    font-size: var(--fs-xl);
+  }
+  .pain__problem {
+    color: var(--ink-3);
+    max-width: 44ch;
+  }
+  .pain__answer {
+    max-width: 48ch;
+    padding-left: var(--space-4);
+    border-left: 1px solid var(--mark);
+    font-weight: 450;
+    color: var(--ink);
+  }
+  @media (max-width: 46rem) {
+    .pains__grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-7);
+    }
+  }
+
+  /* ---------- Work ---------- */
+  .work__list {
+    display: grid;
+    gap: clamp(4rem, 3rem + 5vw, 8rem);
+  }
+  .work__foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4) var(--space-6);
+    margin-top: var(--space-8);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--line);
+  }
+
+  /* ---------- Process ---------- */
+  .process__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--space-8) clamp(2rem, 6vw, 7rem);
+    align-items: start;
+  }
+  .process__head {
+    position: sticky;
+    top: calc(var(--header-h) + 2rem);
+    display: grid;
+    gap: var(--space-5);
+  }
+  .process__head h2 {
+    font-size: var(--fs-3xl);
+  }
+
+  .steps {
+    --rail: 4rem;
+    --rail-x: 1.25rem;
+    position: relative;
+    display: grid;
+    gap: var(--space-8);
+    list-style: none;
+    padding-left: var(--rail);
+  }
+  /* The rail is a tape measure; it fills as you read through the steps. */
+  .steps::before,
+  .steps::after {
+    content: '';
+    position: absolute;
+    top: 0.4rem;
+    bottom: 0.4rem;
+    left: var(--rail-x);
+  }
+  .steps::before {
+    width: 10px;
+    border-left: 1px solid var(--line-strong);
+    background:
+      repeating-linear-gradient(to bottom, var(--line-strong) 0 1px, transparent 1px 2.5rem) left / 10px 100% no-repeat,
+      repeating-linear-gradient(to bottom, var(--line-strong) 0 1px, transparent 1px 1.25rem) left / 5px 100% no-repeat;
+  }
+  .steps::after {
+    width: 2px;
+    margin-left: -1px;
+    background: var(--mark);
+    transform-origin: top;
+    transform: scaleY(1);
+  }
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .steps::after {
+        animation: rail-fill linear both;
+        animation-timeline: view();
+        animation-range: entry 35% cover 65%;
+      }
+    }
+  }
+  @keyframes rail-fill {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+
+  .step {
+    position: relative;
+    display: grid;
+    gap: var(--space-3);
+  }
+  .step__num {
+    position: absolute;
+    z-index: 1;
+    left: calc(var(--rail-x) - var(--rail));
+    top: 0;
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border: 1px solid var(--mark);
+    border-radius: 50%;
+    background: var(--bg);
+    font-family: var(--font-display);
+    font-size: var(--fs-base);
+    line-height: 1;
+    color: var(--mark);
+    transform: translateX(-50%);
+  }
+  .step__title {
+    font-size: var(--fs-xl);
+  }
+  .step__text {
+    max-width: 50ch;
+    color: var(--ink-2);
+  }
+
+  @media (max-width: 52rem) {
+    .process__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .process__head {
+      position: static;
+    }
+  }
+
+  /* ---------- Terms ---------- */
+  .terms__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+    gap: var(--space-7) var(--space-7);
+  }
+  .term {
+    display: grid;
+    align-content: start;
+    gap: var(--space-3);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--line-strong);
+  }
+  .term__title {
+    font-family: var(--font-display);
+    font-size: var(--fs-xl);
+    line-height: 1.15;
+  }
+  .term__text {
+    margin: 0;
+    color: var(--ink-2);
+  }
+  .term__link {
+    display: block;
+    margin-top: var(--space-3);
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    color: var(--ink);
+    text-decoration-color: var(--mark);
+    text-underline-offset: 0.25em;
+    text-decoration-thickness: 1px;
+  }
+
+  /* ---------- FAQ ---------- */
+  .faq__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--space-7) clamp(2rem, 6vw, 7rem);
+  }
+  .faq__title {
+    font-size: var(--fs-3xl);
+  }
+  .faq__list {
+    border-top: 1px solid var(--line-strong);
+  }
+  .faq__item {
+    border-bottom: 1px solid var(--line);
+    interpolate-size: allow-keywords;
+  }
+  .faq__item::details-content {
+    block-size: 0;
+    overflow: hidden;
+    transition:
+      block-size 0.4s var(--ease),
+      content-visibility 0.4s allow-discrete;
+  }
+  .faq__item[open]::details-content {
+    block-size: auto;
+  }
+  .faq__q {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    padding-block: var(--space-5);
+    font-family: var(--font-display);
+    font-size: var(--fs-lg);
+    line-height: 1.3;
+    cursor: pointer;
+    list-style: none;
+  }
+  .faq__q::-webkit-details-marker {
+    display: none;
+  }
+  .faq__icon {
+    position: relative;
+    flex: none;
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+  .faq__icon::before,
+  .faq__icon::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    background: currentColor;
+    transition: transform 0.35s var(--ease);
+  }
+  .faq__icon::after {
+    transform: rotate(90deg);
+  }
+  .faq__item[open] .faq__icon::after {
+    transform: rotate(0deg);
+  }
+  .faq__a {
+    max-width: 56ch;
+    padding-bottom: var(--space-5);
+    color: var(--ink-2);
+  }
+  @media (max-width: 52rem) {
+    .faq__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* ---------- Brief ---------- */
+  .brief__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    gap: var(--space-8) clamp(2rem, 6vw, 7rem);
+    align-items: start;
+  }
+  .brief__head {
+    display: grid;
+    gap: var(--space-5);
+  }
+  .brief__head h2 {
+    font-size: var(--fs-3xl);
+  }
+  .brief__contact {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4) var(--space-5);
+    margin-top: var(--space-3);
+  }
+  .brief__email {
+    font-size: var(--fs-lg);
+  }
+
+  .brief__card {
+    position: relative;
+    display: grid;
+    gap: var(--space-5);
+    padding: clamp(1.5rem, 1rem + 2vw, 2.75rem);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-m);
+    background: var(--bg-raised);
+  }
+  .brief__card-title {
+    font-family: var(--font-display);
+    font-size: var(--fs-xl);
+    line-height: 1;
+  }
+  .brief__fields {
+    display: grid;
+  }
+  .brief__field {
+    display: grid;
+    gap: 0.15rem;
+    padding-block: var(--space-4);
+    border-bottom: 1px dashed var(--line-strong);
+  }
+  .brief__field dt {
+    font-weight: 500;
+  }
+  .brief__field dd {
+    margin: 0;
+    font-size: var(--fs-sm);
+    color: var(--ink-3);
+  }
+  .brief__send {
+    justify-self: start;
+    margin-top: var(--space-3);
+  }
+
+  @media (max-width: 52rem) {
+    .brief__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

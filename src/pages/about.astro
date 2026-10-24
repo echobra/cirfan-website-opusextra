@@ -1,0 +1,237 @@
+---
+// src/pages/about.astro
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { site } from '../config/site';
+
+// Years of experience shown on the tape. `years` sets the bar length; `label` is what people read.
+const experience = [
+  { field: 'Ecommerce', years: 5, label: '5+ years' },
+  { field: 'AI', years: 4, label: '4 years, since ChatGPT launched in 2022' },
+  { field: 'Advertising', years: 2, label: '2 years' },
+];
+const scale = 6;
+
+const jsonLd = [
+  {
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    url: `${site.url}/about`,
+    mainEntity: {
+      '@type': 'Person',
+      name: site.owner,
+      jobTitle: site.ownerTitle,
+      worksFor: { '@type': 'Organization', name: 'cirfan', url: site.url },
+      knowsAbout: ['Ecommerce', 'Advertising', 'Prompt engineering', 'AI image generation', 'AI video generation'],
+    },
+  },
+];
+---
+
+<BaseLayout
+  title="About Edward | cirfan"
+  description="cirfan is run by one person, Edward: 5+ years in ecommerce, 2 in advertising, and 4 working with AI since ChatGPT launched in 2022."
+  jsonLd={jsonLd}
+>
+  <section class="page-head">
+    <div class="wrap page-head__inner">
+      <h1>One person, from brief to final file.</h1>
+      <p class="lede">
+        I’m Edward. I own and run cirfan on my own. The person who reads your brief is the person who writes the prompts,
+        generates the shots, and edits the ad.
+      </p>
+    </div>
+  </section>
+
+  <section class="section about">
+    <div class="wrap about__grid">
+      <aside class="tape-card" aria-labelledby="exp-title">
+        <h2 id="exp-title" class="tape-card__title">Experience, measured in years</h2>
+        <ul class="exp">
+          {
+            experience.map((e) => (
+              <li class="exp__row">
+                <span class="exp__field">{e.field}</span>
+                <span class="exp__label">{e.label}</span>
+                <span class="exp__bar" data-years={e.years} aria-hidden="true" />
+              </li>
+            ))
+          }
+        </ul>
+        <div class="exp__scale" aria-hidden="true">
+          {Array.from({ length: scale + 1 }, (_, i) => <span>{i}</span>)}
+        </div>
+      </aside>
+
+      <div class="prose about__story">
+        <h2>How I got here</h2>
+        <p>
+          I’ve worked in ecommerce for more than five years and in advertising for two. When ChatGPT came out in 2022, I
+          jumped in right away. The fascination snowballed: first prompt engineering, then code, then images, and now
+          video.
+        </p>
+
+        <h2>Why cirfan exists</h2>
+        <p>
+          Founders and small business owners usually don’t want to become expert prompt engineers or AI video producers,
+          and they shouldn’t have to. Every hour spent wrestling with tools is an hour not spent on product, customers,
+          operations, or sales.
+        </p>
+        <p>
+          The tools also move fast. New models arrive constantly, and staying current is a job of its own. Getting
+          consistent results across a full set of ads is harder still.
+        </p>
+        <p>So cirfan does one thing: high quality AI image and video ad creatives. No add-on services.</p>
+
+        <h2>How I work</h2>
+        <p>
+          I start with your data, not a blank prompt. Your best-performing creatives and their lifetime metrics show which
+          styles, hooks, and calls to action already work for you. Competitor references sharpen the direction when you
+          want to improve.
+        </p>
+        <p>
+          I won’t promise results, because no one honestly can. You get careful work, watermarked drafts to inspect before
+          you pay, and full rights to the final files once payment clears.
+        </p>
+
+        <p class="signature">
+          <span class="signature__name">Edward</span>
+          <span class="signature__role">Founder, cirfan</span>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section cta">
+    <div class="wrap cta__inner">
+      <h2>Have ads that work? Let’s build on them.</h2>
+      <a class="btn btn--primary" href="/#brief">Start a project</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .page-head h1 {
+    max-width: 14ch;
+  }
+
+  .about__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--space-8) clamp(2rem, 7vw, 8rem);
+    align-items: start;
+  }
+
+  .tape-card {
+    position: sticky;
+    top: calc(var(--header-h) + 2rem);
+    padding: clamp(1.5rem, 1rem + 1.5vw, 2.25rem);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-m);
+    background: var(--bg-raised);
+  }
+  .tape-card__title {
+    font-size: var(--fs-xl);
+    margin-bottom: var(--space-6);
+  }
+
+  .exp {
+    display: grid;
+    gap: var(--space-5);
+    list-style: none;
+  }
+  .exp__row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.2rem var(--space-3);
+    align-items: baseline;
+  }
+  .exp__field {
+    font-weight: 500;
+  }
+  .exp__label {
+    justify-self: end;
+    font-size: var(--fs-xs);
+    color: var(--ink-3);
+    text-align: right;
+  }
+  .exp__bar {
+    grid-column: 1 / -1;
+    height: 0.6rem;
+    border-radius: 1px;
+    background:
+      repeating-linear-gradient(to right, var(--bg-raised) 0 1px, transparent 1px calc(100% / var(--years, 1))) ,
+      var(--mark);
+    width: calc(var(--years, 1) / 6 * 100%);
+    transform-origin: left;
+  }
+  .exp__bar[data-years='1'] { --years: 1; }
+  .exp__bar[data-years='2'] { --years: 2; }
+  .exp__bar[data-years='3'] { --years: 3; }
+  .exp__bar[data-years='4'] { --years: 4; }
+  .exp__bar[data-years='5'] { --years: 5; }
+  .exp__bar[data-years='6'] { --years: 6; }
+
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .exp__bar {
+        animation: bar-grow linear both;
+        animation-timeline: view();
+        animation-range: entry 10% cover 35%;
+      }
+    }
+  }
+  @keyframes bar-grow {
+    from {
+      transform: scaleX(0);
+    }
+  }
+
+  .exp__scale {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--space-5);
+    padding-top: 0.6rem;
+    font-size: var(--fs-xs);
+    color: var(--ink-3);
+    background:
+      linear-gradient(var(--line-strong), var(--line-strong)) top / 100% 1px no-repeat,
+      repeating-linear-gradient(to right, var(--line-strong) 0 1px, transparent 1px calc(100% / 6)) top / 100% 8px no-repeat,
+      repeating-linear-gradient(to right, var(--line-strong) 0 1px, transparent 1px calc(100% / 12)) top / 100% 4px no-repeat;
+    border-right: 1px solid var(--line-strong);
+    border-image: linear-gradient(var(--line-strong) 0 8px, transparent 8px) 1;
+  }
+  .exp__scale span {
+    width: 0;
+    display: flex;
+    justify-content: center;
+  }
+
+  .about__story h2:first-child {
+    margin-top: 0;
+  }
+
+  .signature {
+    display: grid;
+    gap: 0.25rem;
+    margin-top: var(--space-7) !important;
+  }
+  .signature__name {
+    font-family: var(--font-display);
+    font-size: var(--fs-2xl);
+    line-height: 1;
+    color: var(--ink);
+  }
+  .signature__role {
+    font-size: var(--fs-sm);
+    color: var(--ink-3);
+  }
+
+  @media (max-width: 52rem) {
+    .about__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .tape-card {
+      position: static;
+    }
+  }
+</style>

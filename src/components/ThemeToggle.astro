@@ -1,0 +1,103 @@
+---
+// src/components/ThemeToggle.astro
+// Light/dark switch. The visual state comes from <html data-theme>, so it is correct before any script runs.
+// Logic lives in src/scripts/theme.ts.
+---
+
+<button class="theme-toggle" type="button" role="switch" aria-checked="false" data-theme-toggle>
+  <span class="visually-hidden">Dark mode</span>
+  <span class="theme-toggle__track" aria-hidden="true">
+    <span class="theme-toggle__knob">
+      <svg viewBox="0 0 24 24" width="16" height="16" focusable="false">
+        <mask id="theme-toggle-cut">
+          <rect width="24" height="24" fill="#fff"></rect>
+          <circle class="theme-toggle__cut" cx="18" cy="6" r="7" fill="#000"></circle>
+        </mask>
+        <circle class="theme-toggle__core" cx="12" cy="12" r="8" fill="currentColor" mask="url(#theme-toggle-cut)"></circle>
+        <g class="theme-toggle__rays" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+          <line x1="12" y1="1.5" x2="12" y2="3.6"></line>
+          <line x1="12" y1="20.4" x2="12" y2="22.5"></line>
+          <line x1="1.5" y1="12" x2="3.6" y2="12"></line>
+          <line x1="20.4" y1="12" x2="22.5" y2="12"></line>
+          <line x1="4.6" y1="4.6" x2="6.1" y2="6.1"></line>
+          <line x1="17.9" y1="17.9" x2="19.4" y2="19.4"></line>
+          <line x1="4.6" y1="19.4" x2="6.1" y2="17.9"></line>
+          <line x1="17.9" y1="6.1" x2="19.4" y2="4.6"></line>
+        </g>
+      </svg>
+    </span>
+  </span>
+</button>
+
+<style>
+  .theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px;
+    margin: -6px;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    border-radius: 999px;
+  }
+  .theme-toggle__track {
+    position: relative;
+    display: block;
+    width: 3.25rem;
+    height: 1.75rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    transition: border-color 0.3s var(--ease-out);
+  }
+  .theme-toggle:hover .theme-toggle__track {
+    border-color: var(--ink);
+  }
+  .theme-toggle__knob {
+    position: absolute;
+    top: 50%;
+    left: 3px;
+    display: grid;
+    place-items: center;
+    width: 1.375rem;
+    height: 1.375rem;
+    border-radius: 50%;
+    background: var(--btn-bg);
+    color: var(--btn-ink);
+    transform: translate(0, -50%);
+    transition: transform 0.55s var(--ease);
+  }
+  .theme-toggle__core,
+  .theme-toggle__cut,
+  .theme-toggle__rays {
+    transform-box: view-box;
+    transform-origin: 12px 12px;
+    transition:
+      transform 0.55s var(--ease),
+      opacity 0.35s var(--ease-out);
+  }
+  /* Light: a sun on the left. */
+  .theme-toggle__core {
+    transform: scale(0.52);
+  }
+  .theme-toggle__cut {
+    transform: translate(9px, -9px);
+  }
+  .theme-toggle__rays {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+  /* Dark: a moon on the right. */
+  :global(:root[data-theme='dark']) .theme-toggle__knob {
+    transform: translate(1.5rem, -50%);
+  }
+  :global(:root[data-theme='dark']) .theme-toggle__core {
+    transform: scale(0.82);
+  }
+  :global(:root[data-theme='dark']) .theme-toggle__cut {
+    transform: translate(0, 0);
+  }
+  :global(:root[data-theme='dark']) .theme-toggle__rays {
+    opacity: 0;
+    transform: rotate(-60deg) scale(0.6);
+  }
+</style>

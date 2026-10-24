@@ -1,0 +1,162 @@
+---
+// src/components/Footer.astro
+import { site, nav, policies } from '../config/site';
+
+const year = new Date().getFullYear();
+const socials = Object.entries(site.social).filter(([, url]) => url) as [string, string][];
+const socialLabel: Record<string, string> = { x: 'X', instagram: 'Instagram', linkedin: 'LinkedIn' };
+---
+
+<footer class="site-footer">
+  <div class="wrap site-footer__grid">
+    <div class="site-footer__brand">
+      <a href="/" class="site-footer__mark" aria-label="cirfan, home">
+        <img class="site-footer__mark-img site-footer__mark-img--light" src="/logo-mark.png" width="44" height="44" alt="" decoding="async" />
+        <img class="site-footer__mark-img site-footer__mark-img--dark" src="/logo-mark-on-dark.png" width="44" height="44" alt="" decoding="async" />
+      </a>
+      <p class="site-footer__name">
+        cirfan <span class="site-footer__say">pronounced {site.pronunciation}</span>
+      </p>
+      <p class="site-footer__tag">AI image and video ad creatives. Nothing else.</p>
+      <a class="link" href={`mailto:${site.email}`}>{site.email}</a>
+    </div>
+
+    <nav class="site-footer__col" aria-label="Footer">
+      <h2 class="site-footer__heading">Site</h2>
+      <ul>
+        {nav.map((item) => <li><a href={item.href}>{item.label}</a></li>)}
+        <li><a href="/#brief">Start a project</a></li>
+      </ul>
+    </nav>
+
+    <nav class="site-footer__col" aria-label="Policies">
+      <h2 class="site-footer__heading">Policies</h2>
+      <ul>
+        {policies.map((item) => <li><a href={item.href}>{item.label}</a></li>)}
+      </ul>
+    </nav>
+
+    {
+      socials.length > 0 && (
+        <nav class="site-footer__col" aria-label="Social">
+          <h2 class="site-footer__heading">Elsewhere</h2>
+          <ul>
+            {socials.map(([key, url]) => (
+              <li>
+                <a href={url} rel="me noopener" target="_blank">
+                  {socialLabel[key] ?? key}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )
+    }
+  </div>
+
+  <div class="wrap">
+    <div class="site-footer__base">
+      <p>&copy; {year} cirfan. All rights reserved.</p>
+      <p>Demo creatives on this site are watermarked and may not be reused.</p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    margin-top: auto;
+    border-top: 1px solid var(--line);
+    padding-top: var(--space-8);
+    font-size: var(--fs-sm);
+  }
+
+  .site-footer__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr));
+    gap: var(--space-7) var(--space-6);
+  }
+
+  .site-footer__brand {
+    display: grid;
+    align-content: start;
+    justify-items: start;
+    gap: var(--space-3);
+    max-width: 22rem;
+  }
+
+  .site-footer__mark {
+    display: inline-flex;
+    margin-bottom: var(--space-2);
+    border-radius: var(--radius-s);
+  }
+  .site-footer__mark-img--light {
+    display: var(--logo-light);
+  }
+  .site-footer__mark-img--dark {
+    display: var(--logo-dark);
+  }
+
+  .site-footer__name {
+    font-family: var(--font-display);
+    font-size: var(--fs-xl);
+    line-height: 1.1;
+  }
+  .site-footer__say {
+    margin-left: 0.35em;
+    font-family: var(--font-text);
+    font-size: var(--fs-sm);
+    color: var(--ink-3);
+  }
+
+  .site-footer__tag {
+    color: var(--ink-2);
+    margin-bottom: var(--space-2);
+  }
+
+  .site-footer__heading {
+    margin-bottom: var(--space-4);
+    font-family: var(--font-text);
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--ink);
+  }
+
+  .site-footer__col ul {
+    display: grid;
+    gap: var(--space-3);
+    list-style: none;
+  }
+  .site-footer__col a {
+    color: var(--ink-2);
+    text-decoration: none;
+    transition: color 0.2s var(--ease-out);
+  }
+  .site-footer__col a:hover {
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--mark);
+    text-underline-offset: 0.25em;
+  }
+
+  .site-footer__base {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-3) var(--space-6);
+    margin-top: var(--space-8);
+    padding-block: var(--space-5) var(--space-6);
+    border-top: 1px solid var(--line);
+    color: var(--ink-3);
+    font-size: var(--fs-xs);
+  }
+
+  @media (max-width: 60rem) {
+    .site-footer__grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .site-footer__brand {
+      grid-column: 1 / -1;
+    }
+  }
+</style>

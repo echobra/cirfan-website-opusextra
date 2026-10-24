@@ -1,0 +1,78 @@
+---
+// src/pages/work.astro
+// The full portfolio. Add or edit pieces in src/data/portfolio.ts, not here.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import WorkItem from '../components/WorkItem.astro';
+import { site } from '../config/site';
+import { portfolio } from '../data/portfolio';
+
+const jsonLd = portfolio
+  .filter((item) => item.media.kind === 'video')
+  .map((item) => {
+    const media = item.media as Extract<typeof item.media, { kind: 'video' }>;
+    return {
+      '@context': 'https://schema.org',
+      '@type': 'VideoObject',
+      name: `${item.title} (${item.style} demo ad)`,
+      description: item.summary,
+      thumbnailUrl: new URL(media.poster, site.url).href,
+      contentUrl: new URL(media.src, site.url).href,
+      uploadDate: item.published,
+      duration: `PT${Math.round(media.seconds)}S`,
+      creator: { '@type': 'Organization', name: 'cirfan', url: site.url },
+    };
+  });
+---
+
+<BaseLayout
+  title="Work | cirfan, AI video and image ads"
+  description="Demo AI ad creatives by cirfan in cinematic and UGC styles. Demos show the craft only; every client ad is adjusted to the brand, product, and data."
+  jsonLd={jsonLd}
+>
+  <section class="page-head">
+    <div class="wrap page-head__inner">
+      <h1>Work</h1>
+      <p class="lede">
+        Demo creatives that show the styles we produce. Every client project starts from the client’s own creatives and
+        metrics.
+      </p>
+      <p class="notice">
+        <strong>These demos are not final.</strong> They are samples, not client deliverables, and every ad is adjusted to
+        the client’s brand, product, and needs. Each carries a moving watermark to discourage use, abuse, replication, or
+        duplication.
+      </p>
+    </div>
+  </section>
+
+  <section class="section portfolio" aria-label="Portfolio">
+    <div class="wrap">
+      <div class="portfolio__grid">
+        {portfolio.map((item) => <WorkItem item={item} variant="card" headingLevel="h2" />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="section cta">
+    <div class="wrap cta__inner">
+      <h2>Want ads built from your own numbers?</h2>
+      <a class="btn btn--primary" href="/#brief">Start a project</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+
+  .portfolio {
+    padding-top: var(--space-8);
+  }
+  .portfolio__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+    gap: var(--space-9) clamp(1.5rem, 4vw, 4rem);
+    align-items: start;
+  }
+  .portfolio__grid > :global(.work-item) {
+    max-width: 26rem;
+  }
+
+</style>

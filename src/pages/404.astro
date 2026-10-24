@@ -1,0 +1,32 @@
+---
+// src/pages/404.astro
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Page not found | cirfan" description="This page does not exist." noindex>
+  <section class="page-head missing">
+    <div class="wrap page-head__inner">
+      <h1>This page isn’t here.</h1>
+      <p class="lede">The link may be old or mistyped. The work and the home page are a click away.</p>
+      <div class="missing__actions">
+        <a class="btn btn--primary" href="/">Go to the home page</a>
+        <a class="link" href="/work">See the work</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .missing {
+    padding-bottom: var(--section);
+  }
+  .missing h1 {
+    max-width: 12ch;
+  }
+  .missing__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4) var(--space-6);
+  }
+</style>
