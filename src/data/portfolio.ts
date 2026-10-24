@@ -119,6 +119,30 @@ export const portfolio: PortfolioItem[] = [
     published: '2026-10-23',
     featured: true,
   },
+  {
+    slug: 'dell-technologies',
+    title: 'Dell Technologies',
+    style: 'UGC',
+    summary: 'A singing UGC creative, a twist into entertainment.',
+    media: {
+      kind: 'video',
+      src: '/portfolio/dell-ad-demo-v1.mp4',
+      poster: '/portfolio/dell-ad-demo-v1.webp',
+      width: 608,
+      height: 1080,
+      seconds: 10,
+      hookSeconds: 3,
+    },
+    bullets: [
+      'Sneak peek into a server room.',
+      'The server engineer loves his job.',
+      'Sings along with the server rack hums and beeps.',
+      'Ends with a logo and motto hover.',
+    ],
+    note: '',
+    published: '2026-10-23',
+    featured: true,
+  },
 ];
 
 export const featured = portfolio.filter((item) => item.featured).slice(0, 2);
