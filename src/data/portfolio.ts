@@ -91,7 +91,7 @@ export const portfolio: PortfolioItem[] = [
       'Cuts between wide strides and a close portrait to hold attention for the full ten seconds.',
       'Closes on a clean brand card that doubles as the call to action.',
     ],
-    note: 'adidas and its logos are trademarks of adidas AG. Shown as a visual reference only. cirfan does not claim or own them and is not affiliated with adidas.',
+    note: '',
     published: '2026-10-23',
     featured: true,
   },
