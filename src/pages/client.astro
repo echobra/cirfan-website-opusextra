@@ -1,0 +1,189 @@
+---
+// src/pages/client.astro
+// Client delivery page. Served at /c/<id> through a rewrite in vercel.json. The page shows nothing until the
+// visitor creates the password (first visit) or signs in. Logic is in src/scripts/portal.ts.
+import AppLayout from '../layouts/AppLayout.astro';
+import { site } from '../config/site';
+---
+
+<AppLayout title="Your files | cirfan" label="Client page">
+  <div class="wrap portal" data-portal data-email={site.email}>
+    <p class="lede" data-view="loading">Loading your page</p>
+
+    <div class="view" data-view="missing" hidden>
+      <h1>This link isn’t active.</h1>
+      <p class="lede">Check the link you received, or write to <a class="link" href={`mailto:${site.email}`}>{site.email}</a>.</p>
+    </div>
+
+    <form class="view card" data-view="setup" hidden novalidate>
+      <h1>Create a password for this page</h1>
+      <p class="lede">This is your private delivery page. Choose a password to lock it. Nothing on the page is shown until you do, and you’ll need it on any other device.</p>
+      <label class="field">
+        <span class="field__label">New password</span>
+        <input class="input" type="password" name="password" autocomplete="new-password" required />
+      </label>
+      <label class="field">
+        <span class="field__label">Repeat the password</span>
+        <input class="input" type="password" name="confirm" autocomplete="new-password" required />
+      </label>
+      <label class="check"><input type="checkbox" data-show-password data-track="show_password" /> Show password</label>
+      <p class="small-print" data-rule></p>
+      <p class="error" role="alert" data-error></p>
+      <button class="btn btn--primary" type="submit" data-track="create_password">Create password and open</button>
+    </form>
+
+    <form class="view card" data-view="login" hidden novalidate>
+      <h1>Welcome back</h1>
+      <p class="lede">Enter this page’s password.</p>
+      <label class="field">
+        <span class="field__label">Password</span>
+        <input class="input" type="password" name="password" autocomplete="current-password" required />
+      </label>
+      <label class="check"><input type="checkbox" data-show-password data-track="show_password" /> Show password</label>
+      <p class="error" role="alert" data-error></p>
+      <button class="btn btn--primary" type="submit" data-track="sign_in">Sign in</button>
+      <p class="small-print">Forgot it? Ask cirfan to reset the page, then open the link again to create a new one.</p>
+    </form>
+
+    <div class="view card" data-view="locked" hidden>
+      <h1>Sign-in paused</h1>
+      <p class="lede">There were too many wrong passwords, so sign-in is paused for 15 minutes to protect your files. Try again later.</p>
+    </div>
+
+    <div class="view" data-view="files" hidden>
+      <header class="files-head">
+        <div>
+          <h1 data-client-name></h1>
+          <p class="lede" data-contact></p>
+        </div>
+        <button class="btn btn--outline btn--small" type="button" data-sign-out data-track="sign_out">Sign out</button>
+      </header>
+
+      <p class="notice">
+        Files on this page have had their metadata removed. Visits, sign-ins, previews, clicks and downloads are
+        logged with timestamps as a delivery record. See the <a href="/policies/privacy">privacy notice</a>.
+      </p>
+
+      <ul class="deliveries" data-deliveries></ul>
+      <p class="lede" data-files-empty hidden>No files yet. You’ll hear from cirfan when they’re ready.</p>
+    </div>
+  </div>
+
+  <template id="tpl-delivery">
+    <li class="delivery">
+      <div class="delivery__media"></div>
+      <div class="delivery__text">
+        <p class="delivery__name"></p>
+        <p class="delivery__meta"></p>
+        <button class="btn btn--primary btn--small" type="button">Download</button>
+        <p class="delivery__status small-print" aria-live="polite"></p>
+      </div>
+    </li>
+  </template>
+</AppLayout>
+
+<script>
+  import '../scripts/portal';
+</script>
+
+<style>
+  .portal {
+    padding-block: var(--space-8) var(--space-9);
+  }
+  .view h1 {
+    font-size: var(--fs-2xl);
+  }
+  .card {
+    display: grid;
+    gap: var(--space-4);
+    max-width: 30rem;
+  }
+  .field {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .field__label {
+    font-size: var(--fs-sm);
+    font-weight: 500;
+  }
+  .input {
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-s);
+    background: var(--bg-raised);
+    color: var(--ink);
+    font: inherit;
+  }
+  .input:focus-visible {
+    border-color: var(--mark);
+    outline-offset: 1px;
+  }
+  .check {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--fs-sm);
+  }
+  .error {
+    min-height: 1.2em;
+    font-size: var(--fs-sm);
+    color: var(--mark);
+  }
+  .card .btn {
+    justify-self: start;
+  }
+
+  .files-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+  }
+  .files-head .lede {
+    margin-top: var(--space-3);
+  }
+  .notice a {
+    color: var(--ink);
+    text-decoration-color: var(--mark);
+    text-underline-offset: 0.2em;
+  }
+
+  .deliveries {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+    gap: var(--space-7) var(--space-6);
+    margin-top: var(--space-7);
+    list-style: none;
+  }
+  .deliveries :global(.delivery) {
+    display: grid;
+    align-content: start;
+    gap: var(--space-4);
+  }
+  .deliveries :global(.delivery__media video),
+  .deliveries :global(.delivery__media img) {
+    width: 100%;
+    max-height: 28rem;
+    object-fit: contain;
+    border-radius: var(--radius-m);
+    background: var(--bg-sunk);
+    box-shadow: 0 0 0 1px var(--line);
+  }
+  .deliveries :global(.delivery__text) {
+    display: grid;
+    gap: var(--space-2);
+    justify-items: start;
+  }
+  .deliveries :global(.delivery__name) {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .deliveries :global(.delivery__meta) {
+    font-size: var(--fs-sm);
+    color: var(--ink-3);
+  }
+</style>

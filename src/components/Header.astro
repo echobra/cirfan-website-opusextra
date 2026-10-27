@@ -5,7 +5,7 @@ import ThemeToggle from './ThemeToggle.astro';
 import { nav, fitCta } from '../config/site';
 
 const path = Astro.url.pathname.replace(/\.html$/, '').replace(/\/$/, '') || '/';
-const isCurrent = (href: string) => !href.includes('#') && (href === path || (href !== '/' && path.startsWith(href)));
+const isCurrent = (href: string) => !href.includes('#') && (href === path || (href !== '/' && path.startsWith(`${href}/`)));
 ---
 
 <header class="site-header">
@@ -159,7 +159,7 @@ const isCurrent = (href: string) => !href.includes('#') && (href === path || (hr
     transform: translateY(-3px) rotate(-45deg);
   }
 
-  @media (max-width: 52rem) {
+  @media (max-width: 64rem) {
     .site-header__inner {
       gap: var(--space-4);
     }

@@ -1,0 +1,279 @@
+---
+// src/pages/working-together.astro
+// What active clients can expect: their communication channel, their private delivery page,
+// how files are protected, and what gets logged.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import FitCta from '../components/FitCta.astro';
+
+const channels = [
+  {
+    title: 'Email',
+    text: 'Works with any inbox. Questions, feedback, and the link to your files arrive in one thread.',
+  },
+  {
+    title: 'A private Slack channel',
+    text: 'A channel just for your project, shared only with your team. Good when several people give feedback.',
+  },
+];
+
+const deliverySteps = [
+  {
+    title: 'You get a private link',
+    text: 'Your files go on your own page at cirfan.com. The link is sent through the channel you chose.',
+  },
+  {
+    title: 'You create the password',
+    text: 'The first time you open the link, you set the page’s password. Nothing on the page is shown until you do.',
+  },
+  {
+    title: 'You stay signed in',
+    text: 'Your browser stays signed in for about six months. Signing out ends it right away, and you can sign in on other devices with the same password.',
+  },
+  {
+    title: 'You preview and download',
+    text: 'Watch or view each file on the page, then download it. Your page shows whether each download finished.',
+  },
+];
+
+const protections = [
+  {
+    title: 'Metadata removed on upload',
+    text: 'Every file is cleaned before it reaches your page: device, software, location, and editing details, plus anything the generation tools embedded. Only the cleaned copy is stored, so it is the only copy anyone can download.',
+  },
+  {
+    title: 'Links that expire',
+    text: 'Downloads come from private links that stop working after a few minutes, so a link copied out of your browser is useless to anyone else.',
+  },
+  {
+    title: 'A password only you know',
+    text: 'Your password is stored as a salted hash, never as text. cirfan can reset the page, but can never see the password.',
+  },
+  {
+    title: 'Protection against guessing',
+    text: 'After several wrong passwords in a row, sign-in pauses for 15 minutes.',
+  },
+];
+
+const logged = ['Page visits', 'Password creation', 'Sign-ins and wrong passwords', 'Sign-outs', 'Button clicks', 'Previews played', 'Downloads, completed or failed'];
+---
+
+<BaseLayout
+  title="Working together | cirfan"
+  description="What to expect as a cirfan client: email or a private Slack channel, a password-protected delivery page, files with metadata removed, and a timestamped record of every download."
+>
+  <section class="page-head">
+    <div class="wrap page-head__inner">
+      <h1 class="wt-title">What to expect as a client.</h1>
+      <p class="lede">
+        Once a project starts, everything runs through two places: the channel you pick for conversation, and a private
+        page where your files are delivered.
+      </p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="channel-title">
+    <div class="wrap wt-split">
+      <div class="wt-head">
+        <h2 id="channel-title">Your channel</h2>
+        <p class="lede">Choose one when we start. Questions, feedback, and delivery links all go there, so nothing gets lost.</p>
+      </div>
+      <div class="channels">
+        {
+          channels.map((c) => (
+            <div class="channel">
+              <h3>{c.title}</h3>
+              <p>{c.text}</p>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="page-title">
+    <div class="wrap wt-split">
+      <div class="wt-head">
+        <h2 id="page-title">Your delivery page</h2>
+        <p class="lede">Final files never travel as email attachments. They wait for you on a page only you can open.</p>
+      </div>
+      <ol class="wt-steps">
+        {
+          deliverySteps.map((s, i) => (
+            <li class="wt-step">
+              <span class="wt-step__num" aria-hidden="true">
+                {i + 1}
+              </span>
+              <h3>{s.title}</h3>
+              <p>{s.text}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="protect-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="protect-title">How your files are protected</h2>
+      </div>
+      <dl class="protect">
+        {
+          protections.map((p) => (
+            <div class="protect__item">
+              <dt>{p.title}</dt>
+              <dd>{p.text}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="record-title">
+    <div class="wrap wt-split">
+      <div class="wt-head">
+        <h2 id="record-title">A shared record</h2>
+        <p class="lede">
+          Activity on your delivery page is logged with timestamps. It gives both of us a clear record of what was
+          delivered, when, and whether it arrived.
+        </p>
+        <p class="small-print">
+          Logs include IP address and browser details. See the <a class="link" href="/policies/privacy">privacy notice</a>.
+        </p>
+      </div>
+      <ul class="logged">
+        {logged.map((item) => <li>{item}</li>)}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section cta">
+    <div class="wrap cta__inner">
+      <h2>Ready to see if it’s a fit?</h2>
+      <FitCta />
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .wt-title {
+    max-width: 12ch;
+  }
+
+  .wt-split {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--space-7) clamp(2rem, 6vw, 7rem);
+    align-items: start;
+  }
+  .wt-head {
+    display: grid;
+    gap: var(--space-5);
+  }
+  .wt-head h2 {
+    font-size: var(--fs-3xl);
+  }
+
+  .channels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+  }
+  .channel {
+    display: grid;
+    align-content: start;
+    gap: var(--space-3);
+    padding: var(--space-6);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-m);
+    background: var(--bg-raised);
+  }
+  .channel h3 {
+    font-size: var(--fs-xl);
+  }
+  .channel p {
+    color: var(--ink-2);
+  }
+
+  .wt-steps {
+    display: grid;
+    gap: var(--space-7);
+    list-style: none;
+  }
+  .wt-step {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    column-gap: var(--space-4);
+    row-gap: var(--space-2);
+  }
+  .wt-step__num {
+    grid-row: span 2;
+    display: grid;
+    place-items: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border: 1px solid var(--mark);
+    border-radius: 50%;
+    font-family: var(--font-display);
+    color: var(--mark);
+  }
+  .wt-step h3 {
+    font-size: var(--fs-xl);
+  }
+  .wt-step p {
+    max-width: 48ch;
+    color: var(--ink-2);
+  }
+
+  .protect {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-7) clamp(2rem, 6vw, 6rem);
+  }
+  .protect__item {
+    display: grid;
+    align-content: start;
+    gap: var(--space-3);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--line-strong);
+  }
+  .protect dt {
+    font-family: var(--font-display);
+    font-size: var(--fs-xl);
+    line-height: 1.15;
+  }
+  .protect dd {
+    margin: 0;
+    color: var(--ink-2);
+  }
+
+  .logged {
+    display: grid;
+    list-style: none;
+    border-top: 1px solid var(--line-strong);
+  }
+  .logged li {
+    position: relative;
+    padding: var(--space-4) 0 var(--space-4) 1.4rem;
+    border-bottom: 1px dashed var(--line-strong);
+  }
+  .logged li::before {
+    content: '';
+    position: absolute;
+    left: 0.3rem;
+    top: 50%;
+    width: 1px;
+    height: 0.75em;
+    background: var(--mark);
+    transform: translateY(-50%);
+  }
+
+  @media (max-width: 52rem) {
+    .wt-split,
+    .channels,
+    .protect {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

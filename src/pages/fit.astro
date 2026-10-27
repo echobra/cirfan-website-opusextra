@@ -53,8 +53,8 @@ const disqualifying = (questionId: string, value: string) => (disqualifiers[ques
               </div>
               {Object.keys(disqualifiers).includes(q.id) && (
                 <p class="q__stop">
-                  cirfan can’t take on projects without a creative budget. You can still submit to see the result;
-                  nothing will be sent or saved.
+                  cirfan can’t take on projects without a creative budget. You can still submit to see the result,
+                  and your answers will be recorded like any other submission.
                 </p>
               )}
             </fieldset>
@@ -102,8 +102,8 @@ const disqualifying = (questionId: string, value: string) => (disqualifiers[ques
         <div class="form__submit">
           <button class="btn btn--primary" type="submit" data-submit>Send my answers</button>
           <p class="small-print">
-            Your answers are used only to decide whether cirfan can help and to reply to you. They are delivered by email
-            through Resend, a US-based service. See the <a href="/policies/privacy">privacy notice</a>.
+            Your answers are used only to decide whether cirfan can help and to reply to you. They are sent to
+            cirfan’s private Slack workspace, a US-based service. See the <a href="/policies/privacy">privacy notice</a>.
           </p>
         </div>
       </form>

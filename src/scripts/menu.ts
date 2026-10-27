@@ -23,7 +23,7 @@ export function initMenu() {
     }
   });
 
-  window.matchMedia('(min-width: 52.0625rem)').addEventListener('change', (event) => {
+  window.matchMedia('(min-width: 64.0625rem)').addEventListener('change', (event) => {
     if (event.matches) setOpen(false);
   });
 }

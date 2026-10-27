@@ -94,6 +94,12 @@ const terms = [
     href: '/policies/ai-disclosure',
     linkLabel: 'AI disclosure policy',
   },
+  {
+    title: 'AI accuracy',
+    text: 'AI generation can’t always get minute details exactly right, such as small text or logos. Check every draft before approving it.',
+    href: '/policies/ai-accuracy',
+    linkLabel: 'AI accuracy policy',
+  },
 ];
 
 const faqs = [
@@ -247,6 +253,7 @@ const jsonLd = [
       <div class="process__head">
         <h2 id="process-title">From your numbers to a finished ad</h2>
         <p class="lede">One person handles every step, from your brief to the final file.</p>
+        <a class="link process__more" href="/working-together">What to expect once we start</a>
       </div>
       <ol class="steps">
         {
@@ -474,6 +481,9 @@ const jsonLd = [
   }
   .process__head h2 {
     font-size: var(--fs-3xl);
+  }
+  .process__more {
+    justify-self: start;
   }
 
   .steps {

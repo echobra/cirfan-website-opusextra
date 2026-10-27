@@ -1,37 +1,24 @@
 // api/fit.ts
 // Vercel Function that receives the "See if we're a good fit" questionnaire (POST /api/fit).
-// The form is a plain HTML form, so it works without JavaScript. Every answer is checked
-// against src/data/questionnaire.ts; anything unexpected is rejected.
+// Every real submission is posted to Slack, labeled GOOD FIT or NOT A FIT. Nothing is emailed or stored here.
+// The form is a plain HTML form, so it works without JavaScript. Every answer is checked against
+// src/data/questionnaire.js; anything unexpected is rejected.
 //
-// Required environment variables (Vercel > Project > Settings > Environment Variables):
-//   RESEND_API_KEY   API key from resend.com (Sending access only)
-//   FIT_TO_EMAIL     Inbox that receives submissions, for example you@yourmail.com
-//   FIT_FROM_EMAIL   Verified sender, for example "cirfan <forms@cirfan.com>"
+// Required environment variable (Vercel > Project > Settings > Environment Variables):
+//   SLACK_FORM_WEBHOOK   Incoming Webhook URL for the Slack channel that receives submissions
 // Optional:
-//   SITE_ORIGIN      Defaults to https://cirfan.com
+//   SITE_ORIGIN          Defaults to https://cirfan.com
 
-import { questions, limits, isDisqualified, flagsFor, labelFor } from '../src/data/questionnaire.js';
+import { questions, limits, disqualifiers, isDisqualified, flagsFor, labelFor } from '../src/data/questionnaire.js';
+import { go, isSameSiteRequest } from './_lib/http.js';
+import { escapeSlack, postToSlack } from './_lib/slack.js';
 
 type Answers = Record<string, string>;
 
 const MAX_BODY_BYTES = 16_000;
 const EMAIL_PATTERN = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[^\s@<>()[\]\\,;:"]{2,}$/;
 
-const go = (path: string) =>
-  new Response(null, { status: 303, headers: { Location: path, 'Cache-Control': 'no-store' } });
-
-const allowedOrigins = () => {
-  const origins = new Set<string>([process.env.SITE_ORIGIN ?? 'https://cirfan.com', 'https://www.cirfan.com']);
-  for (const key of ['VERCEL_URL', 'VERCEL_BRANCH_URL', 'VERCEL_PROJECT_PRODUCTION_URL']) {
-    const host = process.env[key];
-    if (host) origins.add(`https://${host}`);
-  }
-  // `vercel dev` runs on localhost:3000.
-  if (!process.env.VERCEL || process.env.VERCEL_ENV === 'development') origins.add('http://localhost:3000');
-  return origins;
-};
-
-// Removes control characters (which also blocks email header injection) and trims.
+// Removes control characters and trims. Returns null when the value is too long.
 const text = (value: FormDataEntryValue | null, max: number, multiline = false): string | null => {
   if (value === null) return '';
   if (typeof value !== 'string') return null;
@@ -53,14 +40,59 @@ const normalizeWebsite = (raw: string): string | null => {
   }
 };
 
+const slackMessage = (
+  answers: Answers,
+  contact: { name: string; email: string; website: string; notes: string },
+  disqualified: boolean,
+) => {
+  const verdict = disqualified ? 'NOT A FIT' : 'GOOD FIT';
+  const flagged = flagsFor(answers);
+  const reasons = Object.entries(disqualifiers)
+    .filter(([id, values]) => values.includes(answers[id]))
+    .map(([id]) => `${questions.find((q) => q.id === id)?.legend ?? id} ${labelFor(id, answers[id])}`);
+
+  const blocks: Record<string, unknown>[] = [
+    { type: 'header', text: { type: 'plain_text', text: `${disqualified ? '🔴' : '🟢'} ${verdict}`, emoji: true } },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: [
+          `*${escapeSlack(contact.name)}*`,
+          escapeSlack(contact.email),
+          contact.website ? escapeSlack(contact.website) : '_No website given_',
+        ].join('\n'),
+      },
+    },
+    {
+      type: 'section',
+      fields: questions.map((q) => ({
+        type: 'mrkdwn',
+        text: `*${escapeSlack(q.legend)}*\n${escapeSlack(labelFor(q.id, answers[q.id]))}`,
+      })),
+    },
+  ];
+  if (disqualified) {
+    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `*Disqualified by:* ${escapeSlack(reasons.join('; '))}` }] });
+  }
+  if (flagged.length) {
+    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `*Flags:* ${escapeSlack(flagged.join(', '))}` }] });
+  }
+  if (contact.notes) {
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `*Notes*\n${escapeSlack(contact.notes).slice(0, 2900)}` } });
+  }
+  blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `Received ${new Date().toISOString()}` }] });
+
+  return { text: `${verdict}: ${escapeSlack(contact.name)}`, blocks };
+};
+
 export function GET() {
   return go('/fit');
 }
 
 export async function POST(request: Request) {
   // 1. Only accept same-site form posts.
-  const origin = request.headers.get('origin');
-  if (!origin || !allowedOrigins().has(origin)) return go('/not-sent');
+  if (!isSameSiteRequest(request)) return go('/not-sent');
 
   const type = request.headers.get('content-type') ?? '';
   if (!type.startsWith('application/x-www-form-urlencoded')) return new Response('Unsupported Media Type', { status: 415 });
@@ -75,7 +107,7 @@ export async function POST(request: Request) {
     return go('/not-sent');
   }
 
-  // 2. Honeypot: real people never see or fill this field. Bots get a normal-looking success page.
+  // 2. Honeypot: real people never see or fill this field. Bots get a normal-looking page and Slack stays clean.
   if ((form.get('company_site') ?? '') !== '') return go('/thanks');
 
   // 3. Every question must have one of its listed answers.
@@ -86,10 +118,7 @@ export async function POST(request: Request) {
     answers[q.id] = value;
   }
 
-  // 4. Disqualified: show the "not a fit" page and keep nothing.
-  if (isDisqualified(answers)) return go('/not-a-fit');
-
-  // 5. Contact details.
+  // 4. Contact details.
   const name = text(form.get('name'), limits.name);
   const email = text(form.get('email'), limits.email);
   const websiteRaw = text(form.get('website'), limits.website);
@@ -97,54 +126,13 @@ export async function POST(request: Request) {
   const website = websiteRaw === null ? null : normalizeWebsite(websiteRaw);
   if (!name || !email || !EMAIL_PATTERN.test(email) || website === null || notes === null) return go('/not-sent');
 
-  // 6. Email the submission.
-  const apiKey = process.env.RESEND_API_KEY;
-  const to = process.env.FIT_TO_EMAIL;
-  const from = process.env.FIT_FROM_EMAIL;
-  if (!apiKey || !to || !from) {
-    console.error('fit: missing RESEND_API_KEY, FIT_TO_EMAIL or FIT_FROM_EMAIL');
-    return go('/not-sent');
-  }
+  // 5. Log every real attempt to Slack, labeled.
+  const disqualified = isDisqualified(answers);
+  const sent = await postToSlack(
+    process.env.SLACK_FORM_WEBHOOK,
+    slackMessage(answers, { name, email, website, notes }, disqualified),
+  );
 
-  const flagged = flagsFor(answers);
-  const body = [
-    'New "good fit" questionnaire',
-    '',
-    `Flags: ${flagged.length ? flagged.join(', ') : 'none'}`,
-    '',
-    `Name: ${name}`,
-    `Email: ${email}`,
-    `Website: ${website || 'not given'}`,
-    '',
-    ...questions.map((q) => `${q.legend} ${labelFor(q.id, answers[q.id])}`),
-    '',
-    'Notes:',
-    notes || 'none',
-    '',
-    `Received: ${new Date().toISOString()}`,
-  ].join('\n');
-
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from,
-        to: [to],
-        reply_to: email,
-        subject: `Fit questionnaire: ${name}`,
-        text: body,
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) {
-      console.error(`fit: email provider responded ${res.status}`);
-      return go('/not-sent');
-    }
-  } catch {
-    console.error('fit: email provider unreachable');
-    return go('/not-sent');
-  }
-
-  return go('/thanks');
+  if (disqualified) return go('/not-a-fit');
+  return go(sent ? '/thanks' : '/not-sent');
 }

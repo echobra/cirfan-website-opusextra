@@ -13,7 +13,7 @@ export const site = {
   description:
     'cirfan makes short AI video ads and AI image ads for brands, built from your best-performing ads and their metrics. No prompting, no learning curve.',
   // Date shown as "Last updated" on every policy page. Change it whenever a policy changes.
-  policiesUpdated: '2026-10-26',
+  policiesUpdated: '2026-10-27',
   // Optional public profiles. Leave empty to hide. Example: 'https://x.com/yourhandle'
   social: {
     x: '',
@@ -25,6 +25,7 @@ export const site = {
 export const nav = [
   { label: 'Work', href: '/work' },
   { label: 'Process', href: '/#process' },
+  { label: 'Working together', href: '/working-together' },
   { label: 'About', href: '/about' },
 ] as const;
 
@@ -34,6 +35,7 @@ export const policies = [
   { label: 'Refunds', href: '/policies/refunds' },
   { label: 'Watermarks', href: '/policies/watermarks' },
   { label: 'No guarantees', href: '/policies/no-guarantees' },
+  { label: 'AI accuracy', href: '/policies/ai-accuracy' },
   { label: 'Privacy', href: '/policies/privacy' },
 ] as const;
 

@@ -1,0 +1,74 @@
+---
+// src/layouts/AppLayout.astro
+// Layout for private pages: the admin dashboard and client delivery pages. No search indexing,
+// no public navigation, same fonts, colors and theme switch as the public site.
+import '../styles/global.css';
+import Logo from '../components/Logo.astro';
+import ThemeToggle from '../components/ThemeToggle.astro';
+
+interface Props {
+  title: string;
+  label: string;
+}
+
+const { title, label } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <script is:inline src="/scripts/theme-init.js"></script>
+    <title>{title}</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="preload" href="/fonts/bodoni-moda-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/jost-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <meta name="theme-color" content="#e9eef4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1628" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <header class="app-bar">
+      <div class="wrap app-bar__inner">
+        <span class="app-bar__brand">
+          <Logo height={28} />
+          <span class="app-bar__label">{label}</span>
+        </span>
+        <ThemeToggle />
+      </div>
+    </header>
+    <main id="main">
+      <slot />
+    </main>
+    <script>
+      import '../scripts/main';
+    </script>
+  </body>
+</html>
+
+<style>
+  .app-bar {
+    border-bottom: 1px solid var(--line);
+  }
+  .app-bar__inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    min-height: 4rem;
+  }
+  .app-bar__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+  .app-bar__label {
+    padding-left: var(--space-4);
+    border-left: 1px solid var(--line-strong);
+    font-size: var(--fs-sm);
+    color: var(--ink-3);
+  }
+</style>

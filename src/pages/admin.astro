@@ -1,0 +1,519 @@
+---
+// src/pages/admin.astro
+// Private dashboard at /admin. middleware.ts asks for ADMIN_USERNAME and ADMIN_PASSWORD before this page loads.
+// Create a client page, share its link, upload deliverables (metadata is removed on upload), and read the
+// activity log. All logic is in src/scripts/admin.ts.
+import AppLayout from '../layouts/AppLayout.astro';
+---
+
+<AppLayout title="Dashboard | cirfan" label="Dashboard">
+  <div class="wrap admin">
+    <aside class="side" aria-label="Client pages">
+      <div class="side__head">
+        <h1 class="side__title">Client pages</h1>
+        <button class="btn btn--primary btn--small" type="button" data-new-client>New page</button>
+      </div>
+      <label class="visually-hidden" for="client-search">Search client pages</label>
+      <input class="input" id="client-search" type="search" placeholder="Search" autocomplete="off" data-search />
+      <ul class="client-list" data-client-list></ul>
+      <p class="small-print" data-list-empty hidden>No client pages yet. Create one to get a link.</p>
+      <p class="error" data-list-error hidden></p>
+    </aside>
+
+    <section class="main" aria-live="polite">
+      <div class="empty" data-detail-empty>
+        <p class="lede">Pick a client page, or create one. Each page gets its own private link and acts as that client’s folder.</p>
+      </div>
+
+      <div class="detail" data-detail hidden>
+        <header class="detail__head">
+          <div>
+            <h2 class="detail__name" data-field="name"></h2>
+            <p class="detail__contact" data-field="contact"></p>
+          </div>
+          <div class="detail__actions">
+            <button class="btn btn--outline btn--small" type="button" data-edit>Edit</button>
+            <button class="btn btn--outline btn--small" type="button" data-reset>Reset password</button>
+            <button class="btn btn--outline btn--small" type="button" data-end-sessions>Sign out all browsers</button>
+            <button class="btn btn--outline btn--small btn--danger" type="button" data-delete>Delete page</button>
+          </div>
+        </header>
+
+        <div class="link-row">
+          <code class="link-row__url" data-field="link"></code>
+          <button class="btn btn--primary btn--small" type="button" data-copy-link>Copy link</button>
+          <a class="link" href="#" target="_blank" rel="noopener" data-open-link>Open</a>
+        </div>
+
+        <dl class="facts">
+          <div><dt>Password</dt><dd data-field="password"></dd></div>
+          <div><dt>Files</dt><dd data-field="files"></dd></div>
+          <div><dt>Last client activity</dt><dd data-field="activity"></dd></div>
+          <div><dt>Created</dt><dd data-field="created"></dd></div>
+        </dl>
+
+        <section class="block" aria-labelledby="files-title">
+          <h3 id="files-title" class="block__title">Files</h3>
+          <label class="drop" data-drop>
+            <input type="file" multiple accept=".mp4,.m4v,.mov,.webm,.jpg,.jpeg,.png,.webp" data-file-input />
+            <span class="drop__main">Drop files here or click to choose</span>
+            <span class="drop__hint">MP4, MOV, WebM, JPG, PNG or WebP, up to 200 MB each. Metadata is removed before the client can see anything.</span>
+          </label>
+          <ul class="queue" data-queue></ul>
+          <ul class="file-grid" data-file-grid></ul>
+          <p class="small-print" data-files-empty hidden>No files on this page yet.</p>
+        </section>
+
+        <section class="block" aria-labelledby="log-title">
+          <div class="block__head">
+            <h3 id="log-title" class="block__title">Activity</h3>
+            <div class="block__tools">
+              <label class="visually-hidden" for="log-filter">Filter activity</label>
+              <select class="input input--small" id="log-filter" data-log-filter>
+                <option value="all">Everything</option>
+                <option value="client">Client actions</option>
+                <option value="auth">Sign-ins</option>
+                <option value="downloads">Downloads</option>
+                <option value="admin">Admin and system</option>
+              </select>
+              <button class="btn btn--outline btn--small" type="button" data-csv>Download CSV</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="log">
+              <thead>
+                <tr><th scope="col">Time</th><th scope="col">Who</th><th scope="col">What</th><th scope="col">Details</th><th scope="col">IP</th><th scope="col">Device</th></tr>
+              </thead>
+              <tbody data-log></tbody>
+            </table>
+          </div>
+          <p class="small-print" data-log-empty hidden>Nothing logged yet.</p>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <dialog class="dialog" data-client-dialog aria-labelledby="client-dialog-title">
+    <form method="dialog" class="dialog__form" data-client-form>
+      <h2 id="client-dialog-title" class="dialog__title" data-dialog-title>New client page</h2>
+      <label class="field">
+        <span class="field__label">Client or brand name</span>
+        <input class="input" name="name" maxlength="120" required />
+      </label>
+      <fieldset class="field">
+        <legend class="field__label">Communication</legend>
+        <div class="radio-row">
+          <label class="radio"><input type="radio" name="contactMethod" value="email" checked /> Email</label>
+          <label class="radio"><input type="radio" name="contactMethod" value="slack" /> Private Slack channel</label>
+        </div>
+      </fieldset>
+      <label class="field">
+        <span class="field__label">Email address or Slack channel name</span>
+        <input class="input" name="contactDetail" maxlength="200" />
+      </label>
+      <p class="error" data-dialog-error hidden></p>
+      <div class="dialog__actions">
+        <button class="btn btn--outline btn--small" type="button" value="cancel" data-dialog-cancel>Cancel</button>
+        <button class="btn btn--primary btn--small" type="submit" value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="dialog" data-confirm-dialog aria-labelledby="confirm-title">
+    <form method="dialog" class="dialog__form" data-confirm-form>
+      <h2 id="confirm-title" class="dialog__title" data-confirm-title></h2>
+      <p data-confirm-text></p>
+      <label class="field" data-confirm-type-wrap hidden>
+        <span class="field__label" data-confirm-type-label></span>
+        <input class="input" data-confirm-type autocomplete="off" />
+      </label>
+      <div class="dialog__actions">
+        <button class="btn btn--outline btn--small" type="button" data-confirm-cancel>Cancel</button>
+        <button class="btn btn--primary btn--small" type="submit" data-confirm-ok>Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="tpl-client">
+    <li><button class="client" type="button"><span class="client__name"></span><span class="client__meta"></span></button></li>
+  </template>
+  <template id="tpl-file">
+    <li class="file">
+      <div class="file__preview"></div>
+      <p class="file__name"></p>
+      <p class="file__meta"></p>
+      <button class="btn btn--outline btn--small" type="button">Remove</button>
+    </li>
+  </template>
+  <template id="tpl-queue">
+    <li class="queue__item"><span class="queue__name"></span><span class="queue__status"></span><span class="queue__bar"><span></span></span></li>
+  </template>
+</AppLayout>
+
+<script>
+  import '../scripts/admin';
+</script>
+
+<style>
+  .admin {
+    display: grid;
+    grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr);
+    gap: var(--space-7);
+    padding-block: var(--space-7) var(--space-9);
+    align-items: start;
+  }
+
+  .side {
+    position: sticky;
+    top: var(--space-5);
+    display: grid;
+    gap: var(--space-4);
+  }
+  .side__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+  .side__title {
+    font-size: var(--fs-xl);
+  }
+  .side__head .btn {
+    white-space: nowrap;
+  }
+
+  .input {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0.55rem 0.8rem;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-s);
+    background: var(--bg-raised);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--fs-sm);
+  }
+  .input--small {
+    width: auto;
+    min-height: 2.5rem;
+  }
+
+  .client-list {
+    display: grid;
+    gap: 2px;
+    list-style: none;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .client-list :global(.client) {
+    display: grid;
+    gap: 0.1rem;
+    width: 100%;
+    padding: var(--space-3) var(--space-4);
+    border: 0;
+    border-left: 2px solid transparent;
+    border-radius: 0 var(--radius-s) var(--radius-s) 0;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+  .client-list :global(.client:hover) {
+    background: var(--bg-raised);
+  }
+  .client-list :global(.client[aria-current='true']) {
+    border-left-color: var(--mark);
+    background: var(--bg-raised);
+  }
+  .client-list :global(.client__name) {
+    font-weight: 500;
+  }
+  .client-list :global(.client__meta) {
+    font-size: var(--fs-xs);
+    color: var(--ink-3);
+  }
+
+  .error {
+    font-size: var(--fs-sm);
+    color: var(--mark);
+  }
+
+  .empty {
+    padding: var(--space-8) 0;
+    max-width: 36rem;
+  }
+
+  .detail {
+    display: grid;
+    gap: var(--space-6);
+  }
+  .detail__head {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+  .detail__name {
+    font-size: var(--fs-2xl);
+  }
+  .detail__contact {
+    margin-top: var(--space-2);
+    color: var(--ink-2);
+  }
+  .detail__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: flex-start;
+  }
+  :global(.btn--danger:hover) {
+    border-color: var(--mark);
+    color: var(--mark);
+  }
+
+  .link-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3) var(--space-5);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-s);
+    background: var(--bg-raised);
+  }
+  .link-row__url {
+    flex: 1 1 18rem;
+    overflow-wrap: anywhere;
+    font-size: var(--fs-sm);
+  }
+
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: var(--space-4);
+  }
+  .facts dt {
+    font-size: var(--fs-xs);
+    color: var(--ink-3);
+  }
+  .facts dd {
+    margin: 0.15rem 0 0;
+    font-weight: 500;
+  }
+
+  .block {
+    display: grid;
+    gap: var(--space-4);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--line);
+  }
+  .block__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+  .block__tools {
+    display: flex;
+    gap: var(--space-2);
+  }
+  .block__title {
+    font-size: var(--fs-xl);
+  }
+
+  .drop {
+    position: relative;
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-6);
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--radius-m);
+    text-align: center;
+    cursor: pointer;
+    transition:
+      border-color 0.2s var(--ease-out),
+      background-color 0.2s var(--ease-out);
+  }
+  .drop:hover,
+  .drop:global(.is-over) {
+    border-color: var(--mark);
+    background: var(--bg-raised);
+  }
+  .drop input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .drop:has(input:focus-visible) {
+    outline: 2px solid var(--mark);
+    outline-offset: 3px;
+  }
+  .drop__main {
+    font-weight: 500;
+  }
+  .drop__hint {
+    font-size: var(--fs-xs);
+    color: var(--ink-3);
+  }
+
+  .queue {
+    display: grid;
+    gap: var(--space-2);
+    list-style: none;
+  }
+  .queue :global(.queue__item) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.25rem var(--space-4);
+    font-size: var(--fs-sm);
+  }
+  .queue :global(.queue__name) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .queue :global(.queue__status) {
+    color: var(--ink-3);
+  }
+  .queue :global(.queue__status.is-error) {
+    color: var(--mark);
+  }
+  .queue :global(.queue__bar) {
+    grid-column: 1 / -1;
+    height: 2px;
+    background: var(--line);
+  }
+  .queue :global(.queue__bar span) {
+    display: block;
+    height: 100%;
+    background: var(--mark);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.2s linear;
+  }
+
+  .file-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: var(--space-5);
+    list-style: none;
+  }
+  .file-grid :global(.file) {
+    display: grid;
+    align-content: start;
+    gap: var(--space-2);
+  }
+  .file-grid :global(.file__preview video),
+  .file-grid :global(.file__preview img) {
+    width: 100%;
+    max-height: 16rem;
+    object-fit: contain;
+    border-radius: var(--radius-s);
+    background: var(--bg-sunk);
+  }
+  .file-grid :global(.file__name) {
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .file-grid :global(.file__meta) {
+    font-size: var(--fs-xs);
+    color: var(--ink-3);
+  }
+  .file-grid :global(.file .btn) {
+    justify-self: start;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-s);
+  }
+  .log {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-xs);
+  }
+  .log th,
+  .log :global(td) {
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+  .log th {
+    position: sticky;
+    top: 0;
+    background: var(--bg-raised);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .log :global(td:first-child) {
+    white-space: nowrap;
+  }
+  .log :global(tr.is-bad td) {
+    color: var(--mark);
+  }
+
+  .dialog {
+    width: min(32rem, calc(100vw - 2rem));
+    padding: 0;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-m);
+    background: var(--bg);
+    color: var(--ink);
+  }
+  .dialog::backdrop {
+    background: rgb(10 17 32 / 0.55);
+  }
+  .dialog__form {
+    display: grid;
+    gap: var(--space-4);
+    padding: var(--space-6);
+  }
+  .dialog__title {
+    font-size: var(--fs-xl);
+  }
+  .dialog__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+  .field {
+    display: grid;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .field__label {
+    padding: 0;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+  }
+  .radio-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-5);
+  }
+  .radio {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--fs-sm);
+  }
+
+  @media (max-width: 52rem) {
+    .admin {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .side {
+      position: static;
+    }
+    .client-list {
+      max-height: 16rem;
+    }
+  }
+</style>

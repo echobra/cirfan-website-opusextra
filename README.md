@@ -1,8 +1,8 @@
 <!-- README.md -->
 # cirfan.com
 
-Marketing site and portfolio for cirfan, an AI image and video ad creative studio.
-Built with [Astro](https://astro.build) as a fully static site. No server, no database, no third-party scripts.
+Marketing site, questionnaire, private client delivery pages and an admin dashboard for cirfan, an AI image and video ad studio.
+Built with [Astro](https://astro.build) (static pages) plus three Vercel Functions in `api/` and one Routing Middleware (`middleware.ts`).
 
 ## Run it locally
 
@@ -10,62 +10,101 @@ Requires Node.js 22.12 or newer.
 
 ```bash
 npm install
-npm run dev        # http://localhost:4321
+npm run dev        # pages only, http://localhost:4321
+npx vercel dev     # pages + api/ + middleware, http://localhost:3000 (run `npx vercel env pull .env.local` first)
 npm run build      # checks copy for em/en dashes, then builds to /dist
-npm run preview    # serves the built site
 ```
 
 ## Where to edit things
 
 | What | File |
 | --- | --- |
-| Business name, email, social links, policy date | `src/config/site.ts` |
+| Business name, email, social links, policy date, nav, main button text | `src/config/site.ts` |
 | Portfolio pieces (home shows the first 2 with `featured: true`) | `src/data/portfolio.ts` |
-| Home page copy (pain points, process, terms, FAQ, brief card) | `src/pages/index.astro` (arrays at the top) |
-| About page | `src/pages/about.astro` |
+| Questionnaire questions, answers, disqualifiers, flags | `src/data/questionnaire.js` |
+| Home page copy | `src/pages/index.astro` (arrays at the top) |
+| "What to expect as a client" page | `src/pages/working-together.astro` |
 | Policies (plain Markdown) | `src/pages/policies/*.md` |
-| Colors, fonts, spacing | `src/styles/global.css` (tokens at the top) |
-| Logo files | `public/logo.png`, `public/logo-on-dark.png`, `public/logo-mark*.png` |
-| Editable logo sources (SVG) | `brand/` |
-| Security headers, caching | `vercel.json` |
+| Colors, fonts, spacing | `src/styles/global.css` |
+| Questionnaire to Slack | `api/fit.ts` |
+| Admin dashboard (page / script / API) | `src/pages/admin.astro`, `src/scripts/admin.ts`, `api/admin.ts` |
+| Client delivery page (page / script / API) | `src/pages/client.astro`, `src/scripts/portal.ts`, `api/portal.ts` |
+| Metadata removal | `api/_lib/strip.ts` |
+| Database tables | `supabase/schema.sql` |
+| Security headers, rewrites, function limits | `vercel.json` |
 
-### Add a portfolio piece
+## Environment variables
 
-1. Put `my-ad.mp4` (H.264, 9:16) and a poster `my-ad.webp` in `public/portfolio/`.
-   Poster from any frame: `ffmpeg -ss 1 -i my-ad.mp4 -frames:v 1 -quality 82 my-ad.webp`
-2. Open `src/data/portfolio.ts`, copy the commented template at the top, paste it into the list, fill it in.
-3. `featured: true` puts it on the home page. Order in the list is the order on the page.
+Set these in Vercel, Project Settings, Environment Variables, for Production and Preview. Never commit them.
 
-Image ads use `media: { kind: 'image', src, width, height }` instead of the video block.
+| Name | What it is |
+| --- | --- |
+| `SLACK_FORM_WEBHOOK` | Slack Incoming Webhook URL for the questionnaire channel |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Dashboard login, matched exactly. Use a long password (20+ characters) |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | From Supabase, Project Settings, API. The service role key stays server-side |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | Cloudflare R2 bucket for delivered files |
+| `R2_JURISDICTION` | Optional, for example `eu`, only if the bucket was created in a jurisdiction |
+| `PORTAL_SESSION_DAYS` | Optional, defaults to 183 (about six months) |
+| `SITE_ORIGIN` | Optional, defaults to `https://cirfan.com` |
 
-### Change a policy
+## One-time setup
 
-Edit the `.md` file in `src/pages/policies/`, then update `policiesUpdated` in `src/config/site.ts` so the "Last updated" date is correct.
+### Slack (questionnaire)
+Create a Slack app with Incoming Webhooks, add a webhook for the channel that should receive submissions, and put its URL in `SLACK_FORM_WEBHOOK`. Every real submission is posted there labeled 🟢 GOOD FIT or 🔴 NOT A FIT. Spam caught by the hidden trap field is not posted.
+
+### Supabase (database)
+Create a new Supabase project for cirfan (keep it separate from other businesses), open the SQL Editor, and run `supabase/schema.sql` once.
+
+### Cloudflare R2 (files)
+1. Create a private bucket (no public access, no custom domain), for example `cirfan-deliveries`.
+2. Create an R2 API token with Object Read & Write on that bucket only.
+3. Bucket Settings, CORS policy:
+   ```json
+   [
+     {
+       "AllowedOrigins": ["https://cirfan.com", "https://www.cirfan.com"],
+       "AllowedMethods": ["GET", "PUT", "HEAD"],
+       "AllowedHeaders": ["content-type"],
+       "ExposeHeaders": ["content-length", "etag"],
+       "MaxAgeSeconds": 3600
+     }
+   ]
+   ```
+   Add `http://localhost:3000` while testing with `vercel dev`, and your preview domain if you upload from previews.
+4. Bucket Settings, Object lifecycle rules: delete objects with prefix `incoming/` after 1 day (cleans up abandoned uploads).
+
+### Vercel Firewall
+Add rate limit rules for `/api/fit`, `/api/portal` and `/admin` (for example 20 requests per minute per IP).
+
+## How the client pages work
+
+1. In `/admin`, click New page. A link like `https://cirfan.com/c/acme-skin-co-k3j9x2m8q4ab` is created at once.
+2. Upload files. Each one goes straight from your browser to R2, then the server removes its metadata (ffmpeg remux for video, no quality loss; sharp for images), checks nothing is left, stores only the clean copy and deletes the original. A file that still carries metadata after cleaning is rejected.
+3. Send the link through the client’s channel. The first person to open it creates the password, so send it only to the client. If anyone else got there first, use Reset password.
+4. The client stays signed in for about six months through an HttpOnly cookie. Downloads use signed links that expire after five minutes.
+5. Every visit, sign-in, wrong password, click, preview and download (completed or failed) is logged with time, IP and device. Read it per client in `/admin`, filter it, or export it as CSV.
+
+Limits: 200 MB per file (processing holds the original and the clean copy in the function’s 512 MB of temporary space). Eight wrong passwords in 15 minutes pause sign-in for that page for 15 minutes.
 
 ## Deploy on Vercel (GitHub integration)
 
-1. Create a new GitHub repository and push this folder to it (`node_modules` and `dist` are already ignored).
-2. In Vercel: Add New, Project, import the repository. The Astro preset and the settings in `vercel.json` are picked up automatically. No environment variables are needed.
-3. Add `cirfan.com` under Project Settings, Domains. Set `www.cirfan.com` to redirect to `cirfan.com`.
-4. Every push to `main` deploys to production. Pull requests get preview URLs.
-
-After the first deploy, submit `https://cirfan.com/sitemap-index.xml` in Google Search Console and Bing Webmaster Tools.
+Push to the GitHub repository connected to Vercel. Every push to `main` deploys to production; pull requests get preview URLs. After the first deploy, submit `https://cirfan.com/sitemap-index.xml` in Google Search Console and Bing Webmaster Tools.
 
 ## Security notes
 
-- `vercel.json` sends a strict Content-Security-Policy: only files from cirfan.com can load. No inline scripts or styles exist in the build, by design.
-- If you later add analytics, a booking widget, a form service or any embed, add its domain to the matching CSP directive (`script-src`, `connect-src`, `frame-src`, `img-src`), or it will be silently blocked.
-- HSTS is set with `preload`. Only submit the domain to hstspreload.org once you are sure every subdomain will always use HTTPS.
-- Fonts are self-hosted (SIL Open Font License, see `public/fonts/`), so visitors never contact Google.
+- Strict Content-Security-Policy in `vercel.json`: only cirfan.com plus R2 signed URLs (`*.r2.cloudflarestorage.com`) may load. No inline scripts or styles exist in the build. If you add analytics, a widget or an embed, add its domain to the matching directive or it will be blocked.
+- The dashboard is protected twice: the browser login prompt from `middleware.ts`, and the same check inside `api/admin.ts`, so a misconfigured middleware cannot expose data.
+- Server functions only accept requests whose Origin is cirfan.com or its Vercel URLs, validate every input against an allow list, and never return storage keys or the service role key.
+- Client page passwords are hashed with scrypt; session tokens are stored only as SHA-256 hashes.
+- `.gitignore` keeps `.env*`, `node_modules` and `dist` out of git. Keep it in the repository.
+- Fonts are self-hosted (SIL Open Font License, see `public/fonts/`).
 
 ## Theme behaviour
 
-First visit follows the device setting and keeps following it. Once a visitor uses the switch, the choice is saved in `localStorage` (`cirfan-theme`) and wins from then on. `public/scripts/theme-init.js` applies it before the first paint, so there is no flash.
+First visit follows the device setting and keeps following it. Once a visitor uses the switch, the choice is saved in `localStorage` (`cirfan-theme`). `public/scripts/theme-init.js` applies it before the first paint.
 
 ## Before you launch
 
-- Create the `hello@cirfan.com` mailbox and set up SPF, DKIM and DMARC for the domain.
 - Use a Vercel Pro plan. The Hobby plan is for non-commercial use only.
-- Re-render the face roller demo: its end card still says "your-domain.com".
 - Have a lawyer review the policies, and use a signed service agreement for each client.
-- Quebec's Charter of the French language may require a French version of the site.
+- Quebec’s Charter of the French language may require a French version of the site.

@@ -14,8 +14,13 @@
   },
   "dependencies": {
     "@astrojs/sitemap": "3.7.4",
+    "@aws-sdk/client-s3": "3.1147.0",
+    "@aws-sdk/s3-request-presigner": "3.1147.0",
     "@fontsource-variable/bodoni-moda": "5.3.0",
     "@fontsource-variable/jost": "5.3.0",
-    "astro": "7.3.8"
+    "@supabase/supabase-js": "2.117.3",
+    "astro": "7.3.8",
+    "ffmpeg-static": "5.3.0",
+    "sharp": "0.35.5"
   }
 }

@@ -14,7 +14,8 @@ export default defineConfig({
   },
   integrations: [
     sitemap({
-            filter: (page) => !/\/(404|thanks|not-a-fit|not-sent)$/.test(page),
+      // Keep error, result and private pages out of search engines.
+      filter: (page) => !/\/(404|thanks|not-a-fit|not-sent|admin|client)$/.test(page),
     }),
   ],
   vite: {

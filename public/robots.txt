@@ -1,5 +1,7 @@
 # public/robots.txt
 User-agent: *
 Allow: /
+Disallow: /c/
+Disallow: /api/
 
 Sitemap: https://cirfan.com/sitemap-index.xml
