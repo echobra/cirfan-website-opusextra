@@ -1,6 +1,6 @@
 ---
 // src/components/Footer.astro
-import { site, nav, policies } from '../config/site';
+import { site, nav, policies, fitCta } from '../config/site';
 
 const year = new Date().getFullYear();
 const socials = Object.entries(site.social).filter(([, url]) => url) as [string, string][];
@@ -25,7 +25,7 @@ const socialLabel: Record<string, string> = { x: 'X', instagram: 'Instagram', li
       <h2 class="site-footer__heading">Site</h2>
       <ul>
         {nav.map((item) => <li><a href={item.href}>{item.label}</a></li>)}
-        <li><a href="/#brief">Start a project</a></li>
+        <li><a href={fitCta.href}>{fitCta.label}</a></li>
       </ul>
     </nav>
 
