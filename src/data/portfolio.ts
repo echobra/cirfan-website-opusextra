@@ -147,7 +147,7 @@ export const portfolio: PortfolioItem[] = [
     slug: 'amazon',
     title: 'Amazon',
     style: 'Cinematic',
-    summary: 'A cinematic Amazon advertisement, ideal for TV commercials.',
+    summary: 'A cinematic 16:9 spec ad, built for TV and YouTube placements.',
     media: {
       kind: 'video',
       src: '/portfolio/amazon-ad-v1.mp4',
@@ -158,15 +158,30 @@ export const portfolio: PortfolioItem[] = [
       hookSeconds: 2,
     },
     bullets: [
-      'Tap your phone for instant delivery.',
-      'Ask anything on your Amazon Alexa.',
-      'Make your home smart with Amazon.',
-      'Ends with a logo as a CTA.',
+      'One product moment per scene: ordering from a phone, asking Alexa, running a smart home.',
+      'Each scene shows the benefit happening instead of describing it.',
+      'Landscape 16:9 framing, so it fills TV and YouTube screens.',
+      'Closes on the logo, so the brand is the last thing on screen.',
     ],
-    note: '',
+    note: 'Amazon, Alexa, and their logos are trademarks of Amazon.com, Inc. or its affiliates. Spec ad shown as a visual reference only. cirfan is not affiliated with Amazon.',
     published: '2026-10-26',
     featured: false,
   },
 ];
 
 export const featured = portfolio.filter((item) => item.featured).slice(0, 2);
+
+// Works out the shape of any video or image from its width and height.
+// Used for layout (portrait, square, landscape) and for the 9 x 16 labels in the hero.
+const commonRatios: [number, number][] = [
+  [9, 16], [2, 3], [3, 4], [4, 5], [1, 1], [5, 4], [4, 3], [3, 2], [16, 9], [21, 9],
+];
+
+export const aspectOf = (media: { width: number; height: number }) => {
+  const ratio = media.width / media.height;
+  const [w, h] = commonRatios.reduce((best, r) =>
+    Math.abs(r[0] / r[1] - ratio) < Math.abs(best[0] / best[1] - ratio) ? r : best,
+  );
+  const orientation = ratio > 1.05 ? 'landscape' : ratio < 0.95 ? 'portrait' : 'square';
+  return { w, h, orientation, isVertical916: w === 9 && h === 16 } as const;
+};
