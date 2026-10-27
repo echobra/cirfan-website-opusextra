@@ -3,7 +3,7 @@
 // One portfolio piece. Data comes from src/data/portfolio.ts.
 // variant="feature": wide alternating row (home page). variant="card": grid card (/work).
 import Player from './Player.astro';
-import type { PortfolioItem } from '../data/portfolio';
+import { aspectOf, type PortfolioItem } from '../data/portfolio';
 
 interface Props {
   item: PortfolioItem;
@@ -15,9 +15,13 @@ interface Props {
 const { item, variant = 'card', flip = false, headingLevel = 'h3' } = Astro.props;
 const Heading = headingLevel;
 const label = `${item.title}, ${item.style} demo ad by cirfan`;
+const orientation = aspectOf(item.media).orientation;
 ---
 
-<article class:list={['work-item', `work-item--${variant}`, { 'work-item--flip': flip }]} id={item.slug}>
+<article
+  class:list={['work-item', `work-item--${variant}`, `work-item--${orientation}`, { 'work-item--flip': flip }]}
+   id={item.slug}
+>
   <div class="work-item__media">
     {
       item.media.kind === 'video' ? (
@@ -68,6 +72,20 @@ const label = `${item.title}, ${item.style} demo ad by cirfan`;
   .work-item--feature.work-item--flip .work-item__text {
     justify-self: end;
   }
+
+     /* Landscape and square pieces need a wider media column. */
+     .work-item--feature.work-item--landscape {
+       grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+     }
+     .work-item--feature.work-item--landscape.work-item--flip {
+       grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+     }
+     .work-item--feature.work-item--square {
+       grid-template-columns: minmax(16rem, 28rem) minmax(0, 1fr);
+     }
+     .work-item--feature.work-item--square.work-item--flip {
+       grid-template-columns: minmax(0, 1fr) minmax(16rem, 28rem);
+     }
 
   .work-item__image {
     width: 100%;
@@ -146,11 +164,20 @@ const label = `${item.title}, ${item.style} demo ad by cirfan`;
     .work-item--feature.work-item--flip {
       grid-template-columns: minmax(0, 1fr);
     }
+       .work-item--feature.work-item--landscape,
+       .work-item--feature.work-item--square,
+       .work-item--feature.work-item--landscape.work-item--flip,
+       .work-item--feature.work-item--square.work-item--flip {
+         grid-template-columns: minmax(0, 1fr);
+       }
     .work-item--feature .work-item__media,
     .work-item--feature.work-item--flip .work-item__media {
       order: 0;
       max-width: 22rem;
     }
+       .work-item--feature.work-item--landscape .work-item__media {
+         max-width: none;
+       }
     .work-item--feature.work-item--flip .work-item__text {
       justify-self: start;
     }
