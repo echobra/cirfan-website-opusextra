@@ -3,7 +3,7 @@
 // 9:16 ad player used in the hero, on the home page and on /work.
 // Plays muted when on screen, pauses when off screen, never autoplays for visitors who ask for reduced motion
 // or have data saver on. Without JavaScript the browser's own controls are shown instead.
-import type { VideoMedia } from '../data/portfolio';
+import { aspectOf, type VideoMedia } from '../data/portfolio';
 
 interface Props {
   media: VideoMedia;
@@ -15,18 +15,19 @@ interface Props {
 const { media, title, label, variant = 'card' } = Astro.props;
 const isHero = variant === 'hero';
 const hook = media.hookSeconds ?? 0;
+const aspect = aspectOf(media);
 ---
 
-<figure class:list={['player', `player--${variant}`]} data-player data-title={title}>
+<figure class:list={['player', `player--${variant}`, `player--${aspect.orientation}`]} data-player data-title={title}>
   <div class="player__stage">
     {
       isHero && (
         <>
           <span class="dim dim--w" aria-hidden="true">
-            <span class="dim__label">9</span>
+            <span class="dim__label">{aspect.w}</span>
           </span>
           <span class="dim dim--h" aria-hidden="true">
-            <span class="dim__label">16</span>
+            <span class="dim__label">{aspect.h}</span>
           </span>
         </>
       )
@@ -50,7 +51,7 @@ const hook = media.hookSeconds ?? 0;
         <source src={media.src} type="video/mp4" />
       </video>
       {
-        isHero && (
+        isHero && aspect.isVertical916 && (
           <div class="safezone" aria-hidden="true">
             <span class="safezone__label">Reels safe zone</span>
           </div>
@@ -119,14 +120,14 @@ const hook = media.hookSeconds ?? 0;
     cursor: auto;
   }
 
-  .player__video {
-    width: 100%;
-    height: auto;
-    aspect-ratio: 9 / 16;
-    object-fit: cover;
-    background: var(--bg-sunk);
-  }
-
+     /* No fixed aspect ratio: the browser uses the width and height attributes from
+        src/data/portfolio.ts, so 9:16, 1:1, 4:5 and 16:9 all show uncropped. */
+     .player__video {
+       width: 100%;
+       height: auto;
+       object-fit: contain;
+       background: var(--bg-sunk);
+     }
   /* ---------- Dimension lines (hero only) ---------- */
   .dim {
     position: relative;
