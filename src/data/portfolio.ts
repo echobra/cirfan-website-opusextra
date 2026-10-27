@@ -152,8 +152,8 @@ export const portfolio: PortfolioItem[] = [
       kind: 'video',
       src: '/portfolio/amazon-ad-v1.mp4',
       poster: '/portfolio/amazon-ad-v1.webp',
-      width: 1080,
-      height: 608,
+      width: 1280,
+      height: 720,
       seconds: 9,
       hookSeconds: 2,
     },
@@ -165,7 +165,7 @@ export const portfolio: PortfolioItem[] = [
     ],
     note: '',
     published: '2026-10-26',
-    featured: true,
+    featured: false,
   },
 ];
 
