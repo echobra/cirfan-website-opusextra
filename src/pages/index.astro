@@ -3,8 +3,11 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Player from '../components/Player.astro';
 import WorkItem from '../components/WorkItem.astro';
-import { site, briefMailto } from '../config/site';
-import { featured, portfolio } from '../data/portfolio';
+import FitCta from '../components/FitCta.astro';
+import ShortSection from '../components/ShortSection.astro';
+import FitSection from '../components/FitSection.astro';
+import { site } from '../config/site';
+import { featured, portfolio, aspectOf } from '../data/portfolio';
 
 const hero = portfolio.find((item) => item.slug === 'city-run') ?? portfolio[0];
 const heroMedia = hero.media.kind === 'video' ? hero.media : null;
@@ -34,6 +37,10 @@ const pains = [
 ];
 
 const steps = [
+     {
+       title: 'Fit',
+       text: 'Answer a short questionnaire about your ads, your numbers, and your budget, so we both know the project makes sense before anything starts.',
+     },
   {
     title: 'Measure',
     text: 'Send your best-performing creatives with their lifetime metrics: spend, hook rate, click-through rate, cost per result. They show which styles, hooks, and calls to action already work for you.',
@@ -91,6 +98,10 @@ const terms = [
 
 const faqs = [
   {
+    q: 'How long are the video ads?',
+    a: 'Usually around ten seconds. Short ads keep quality under control and put your selling point where viewers are still watching. If a placement needs a different length, mention it in the questionnaire.',
+  },
+  {
     q: 'Do I need to know anything about AI?',
     a: 'No. If you can describe the ad you want and share what has worked before, that’s enough. The tools, prompts, and models are our side of the work.',
   },
@@ -108,16 +119,8 @@ const faqs = [
   },
   {
     q: 'How is pricing set?',
-    a: 'Each project is quoted after we read your brief, because scope depends on the number of creatives, formats, and styles.',
+    a: 'Each project is quoted after we review your questionnaire because scope depends on the number of creatives, formats, and styles.',
   },
-];
-
-const briefFields = [
-  { label: 'Brand and product', hint: 'Name, website, and what you sell.' },
-  { label: 'Best-performing creatives', hint: 'The ads that have worked best for you.' },
-  { label: 'Lifetime metrics', hint: 'Spend, hook rate, click-through rate, and cost per result for each.' },
-  { label: 'Competitor references', hint: 'Optional. A few ads you admire or want to beat.' },
-  { label: 'Placements', hint: 'Where the ads will run, for example Meta, TikTok, or YouTube.' },
 ];
 
 const jsonLd = [
@@ -148,7 +151,7 @@ const jsonLd = [
 
 <BaseLayout
   title="cirfan | AI image and video ad creatives, made to measure"
-  description="cirfan makes AI image and video ad creatives for brands, built from your best-performing ads and their metrics. No prompting, no tool learning curve."
+  description={site.description}
   jsonLd={jsonLd}
   preloadImage={heroMedia?.poster}
 >
@@ -158,13 +161,13 @@ const jsonLd = [
       <div class="hero__copy">
         <h1 id="hero-title" class="hero__title">Ad creatives, made to measure.</h1>
         <p class="hero__lede">
-          cirfan makes AI image and video ads, and nothing else. We start from your best-performing creatives and their
-          numbers, then build new ads around what already works for your audience.
+           cirfan makes short AI video ads, usually around ten seconds, and AI image ads. We start from your
+           best-performing creatives and their numbers, then build new ads around what already works for your audience.
         </p>
-        <div class="hero__actions">
-          <a class="btn btn--primary" href="#brief">Start a project</a>
-          <a class="link" href="#work">See the work</a>
-        </div>
+           <div class="hero__actions">
+             <FitCta />
+             <a class="link hero__work-link" href="#work">See the work</a>
+           </div>
       </div>
 
       {
@@ -173,9 +176,11 @@ const jsonLd = [
             <Player media={heroMedia} title={hero.title} label={`${hero.title}, cinematic demo ad by cirfan`} variant="hero">
               <figcaption class="hero__caption">
                 <span>Cinematic demo, watermarked. adidas appears as a visual reference only.</span>
-                <button class="chip" type="button" data-safezone aria-pressed="false">
-                  Show safe zone
-                </button>
+                   {aspectOf(heroMedia).isVertical916 && (
+                     <button class="chip" type="button" data-safezone aria-pressed="false">
+                       Show safe zone
+                     </button>
+                   )}
               </figcaption>
             </Player>
           </div>
@@ -209,6 +214,8 @@ const jsonLd = [
     </div>
   </section>
 
+     <!-- Short on purpose -->
+     <ShortSection />
   <!-- Selected work -->
   <section class="section work" id="work" aria-labelledby="work-title">
     <div class="wrap">
@@ -302,38 +309,9 @@ const jsonLd = [
     </div>
   </section>
 
-  <!-- Brief -->
-  <section class="section brief" id="brief" aria-labelledby="brief-title">
-    <div class="wrap brief__grid">
-      <div class="brief__head">
-        <h2 id="brief-title">Start with a brief</h2>
-        <p class="lede">Email the details on this card. We’ll reply with questions or a quote.</p>
-        <div class="brief__contact">
-          <a class="link brief__email" href={`mailto:${site.email}`}>{site.email}</a>
-          <button class="btn btn--outline btn--small" type="button" data-copy={site.email} aria-describedby="copy-status">
-            <span data-copy-label>Copy address</span>
-          </button>
-          <span id="copy-status" class="visually-hidden" role="status" aria-live="polite"></span>
-        </div>
-      </div>
+<!-- Fit -->
+<FitSection />
 
-      <div class="brief__card">
-        <p class="brief__card-title">Brief</p>
-        <dl class="brief__fields">
-          {
-            briefFields.map((f) => (
-              <div class="brief__field">
-                <dt>{f.label}</dt>
-                <dd>{f.hint}</dd>
-              </div>
-            ))
-          }
-        </dl>
-        <a class="btn btn--primary brief__send" href={briefMailto}>Email your brief</a>
-        <p class="small-print">Opens your email app with these headings filled in.</p>
-      </div>
-    </div>
-  </section>
 </BaseLayout>
 
 <style>
@@ -364,12 +342,8 @@ const jsonLd = [
     line-height: 1.5;
     color: var(--ink-2);
   }
-  .hero__actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-4) var(--space-6);
-    margin-top: var(--space-7);
+  .hero__work-link {
+    margin-top: 0.75rem;
   }
   .hero__frame {
     width: calc(clamp(14.5rem, 9rem + 14vw, 22rem) + 2.25rem);
@@ -700,70 +674,4 @@ const jsonLd = [
     }
   }
 
-  /* ---------- Brief ---------- */
-  .brief__grid {
-    display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    gap: var(--space-8) clamp(2rem, 6vw, 7rem);
-    align-items: start;
-  }
-  .brief__head {
-    display: grid;
-    gap: var(--space-5);
-  }
-  .brief__head h2 {
-    font-size: var(--fs-3xl);
-  }
-  .brief__contact {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-4) var(--space-5);
-    margin-top: var(--space-3);
-  }
-  .brief__email {
-    font-size: var(--fs-lg);
-  }
-
-  .brief__card {
-    position: relative;
-    display: grid;
-    gap: var(--space-5);
-    padding: clamp(1.5rem, 1rem + 2vw, 2.75rem);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-m);
-    background: var(--bg-raised);
-  }
-  .brief__card-title {
-    font-family: var(--font-display);
-    font-size: var(--fs-xl);
-    line-height: 1;
-  }
-  .brief__fields {
-    display: grid;
-  }
-  .brief__field {
-    display: grid;
-    gap: 0.15rem;
-    padding-block: var(--space-4);
-    border-bottom: 1px dashed var(--line-strong);
-  }
-  .brief__field dt {
-    font-weight: 500;
-  }
-  .brief__field dd {
-    margin: 0;
-    font-size: var(--fs-sm);
-    color: var(--ink-3);
-  }
-  .brief__send {
-    justify-self: start;
-    margin-top: var(--space-3);
-  }
-
-  @media (max-width: 52rem) {
-    .brief__grid {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
 </style>
