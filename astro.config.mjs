@@ -14,7 +14,7 @@ export default defineConfig({
   },
   integrations: [
     sitemap({
-      filter: (page) => !page.includes('/404'),
+            filter: (page) => !/\/(404|thanks|not-a-fit|not-sent)$/.test(page),
     }),
   ],
   vite: {
