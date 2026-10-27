@@ -143,6 +143,30 @@ export const portfolio: PortfolioItem[] = [
     published: '2026-10-23',
     featured: true,
   },
+  {
+    slug: 'amazon',
+    title: 'Amazon',
+    style: 'Cinematic',
+    summary: 'A cinematic Amazon advertisement, ideal for TV commercials.',
+    media: {
+      kind: 'video',
+      src: '/portfolio/amazon-ad-v1.mp4',
+      poster: '/portfolio/amazon-ad-v1.webp',
+      width: 1080,
+      height: 608,
+      seconds: 9,
+      hookSeconds: 2,
+    },
+    bullets: [
+      'Tap your phone for instant delivery.',
+      'Ask anything on your Amazon Alexa.',
+      'Make your home smart with Amazon.',
+      'Ends with a logo as a CTA.',
+    ],
+    note: '',
+    published: '2026-10-26',
+    featured: true,
+  },
 ];
 
 export const featured = portfolio.filter((item) => item.featured).slice(0, 2);
