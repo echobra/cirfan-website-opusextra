@@ -11,9 +11,9 @@ export const site = {
   ownerTitle: 'Founder and sole operator',
   tagline: 'AI image and video ad creatives, made to measure',
   description:
-    'cirfan makes AI image and video ad creatives for brands, built from your best-performing ads and their metrics. No prompting, no tool learning curve.',
+    'cirfan makes short AI video ads and AI image ads for brands, built from your best-performing ads and their metrics. No prompting, no learning curve.',
   // Date shown as "Last updated" on every policy page. Change it whenever a policy changes.
-  policiesUpdated: '2026-10-23',
+  policiesUpdated: '2026-10-26',
   // Optional public profiles. Leave empty to hide. Example: 'https://x.com/yourhandle'
   social: {
     x: '',
@@ -37,23 +37,12 @@ export const policies = [
   { label: 'Privacy', href: '/policies/privacy' },
 ] as const;
 
-// Pre-filled email for the "Email your brief" button.
-export const briefMailto = (() => {
-  const subject = 'Project brief';
-  const body = [
-    'Brand and product:',
-    '',
-    'Best-performing creatives (links or attachments):',
-    '',
-    'Lifetime metrics for each (spend, hook rate, CTR, cost per result):',
-    '',
-    'Competitor references (optional):',
-    '',
-    'Where the ads will run:',
-    '',
-  ].join('\n');
-  return `mailto:${site.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-})();
+// Main call to action, used in the header, hero, page endings and footer.
+export const fitCta = {
+  label: 'See if we’re a good fit',
+  note: 'Redirects to questionnaire',
+  href: '/fit',
+} as const;
 
 export const formatDate = (iso: string) =>
   new Date(`${iso}T12:00:00Z`).toLocaleDateString('en-US', {
