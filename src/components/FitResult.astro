@@ -1,0 +1,37 @@
+---
+// src/components/FitResult.astro
+// Shared layout for the questionnaire result pages: thanks, not-a-fit, not-sent.
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+interface Props {
+  title: string;
+  heading: string;
+}
+
+const { title, heading } = Astro.props;
+---
+
+<BaseLayout title={`${title} | cirfan`} description={heading} noindex>
+  <section class="page-head result">
+    <div class="wrap page-head__inner">
+      <h1>{heading}</h1>
+      <slot />
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .result {
+    padding-bottom: var(--section);
+  }
+  .result h1 {
+    max-width: 14ch;
+    font-size: var(--fs-3xl);
+  }
+  .result :global(.result__actions) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4) var(--space-6);
+  }
+</style>

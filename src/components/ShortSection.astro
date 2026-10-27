@@ -1,0 +1,170 @@
+---
+// src/components/ShortSection.astro
+// Home page section explaining why most video ads run about ten seconds.
+const reasons = [
+  {
+    title: 'Quality you can control',
+    text: 'AI video is at its best in short clips. At around ten seconds, every frame gets reviewed and nothing drifts: the face, the product, and the light stay consistent from the first frame to the last.',
+  },
+  {
+    title: 'Viewers decide fast',
+    text: 'People choose within seconds whether to keep watching, and fewer stay with every second that passes. By the 10 to 15 second mark, much of the audience has already scrolled on.',
+  },
+  {
+    title: 'The selling point lands early',
+    text: 'If the offer isn’t clear inside that window, many viewers never see it. A short ad puts the hook, the proof, and the call to action in the seconds people actually watch.',
+  },
+];
+---
+
+<section class="section short" id="short" aria-labelledby="short-title">
+  <div class="wrap">
+    <div class="section-head">
+      <h2 id="short-title">Short on purpose</h2>
+      <p class="lede">Most of our video ads run about ten seconds. That length is a deliberate choice.</p>
+    </div>
+
+    <div class="ruler" aria-hidden="true">
+      <span class="ruler__ad"><span class="ruler__ad-label">A typical cirfan ad</span></span>
+      <span class="ruler__fade"><span class="ruler__fade-label">Fewer viewers still watching</span></span>
+      <span class="ruler__ticks"></span>
+      <span class="ruler__num ruler__num--0">0s</span>
+      <span class="ruler__num ruler__num--10">10s</span>
+      <span class="ruler__num ruler__num--15">15s</span>
+    </div>
+
+    <div class="short__grid">
+      {
+        reasons.map((r) => (
+          <div class="reason">
+            <h3 class="reason__title">{r.title}</h3>
+            <p class="reason__text">{r.text}</p>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .ruler {
+    --len: 15;
+    --ad: 10;
+    position: relative;
+    height: 5.5rem;
+    margin-bottom: var(--space-8);
+    color: var(--line-strong);
+  }
+  .ruler__ticks {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 1.6rem;
+    height: 12px;
+    border-right: 1px solid currentColor;
+    background:
+      linear-gradient(currentColor, currentColor) bottom / 100% 1px no-repeat,
+      repeating-linear-gradient(to right, currentColor 0 1px, transparent 1px calc(100% / var(--len))) bottom / 100% 12px no-repeat,
+      repeating-linear-gradient(to right, currentColor 0 1px, transparent 1px calc(100% / var(--len) / 2)) bottom / 100% 6px no-repeat;
+  }
+  .ruler__ad {
+    position: absolute;
+    left: 0;
+    bottom: 1.6rem;
+    width: calc(var(--ad) / var(--len) * 100%);
+    height: 2.4rem;
+    border: 1px solid var(--mark);
+    border-bottom: 0;
+    background: linear-gradient(var(--mark), var(--mark)) bottom / 100% 3px no-repeat;
+  }
+  .ruler__ad-label,
+  .ruler__fade-label {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -60%);
+    padding: 0 0.5rem;
+    background: var(--bg);
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .ruler__ad-label {
+    color: var(--mark);
+  }
+  .ruler__fade {
+    position: absolute;
+    right: 0;
+    bottom: 1.6rem;
+    width: calc((var(--len) - var(--ad)) / var(--len) * 100%);
+    height: 2.4rem;
+    background: repeating-linear-gradient(135deg, var(--line) 0 1px, transparent 1px 7px);
+  }
+  .ruler__fade-label {
+    color: var(--ink-3);
+    font-weight: 400;
+  }
+  .ruler__num {
+    position: absolute;
+    bottom: 0;
+    font-size: var(--fs-xs);
+    color: var(--ink-3);
+    transform: translateX(-50%);
+  }
+  .ruler__num--0 {
+    left: 0;
+    transform: none;
+  }
+  .ruler__num--10 {
+    left: calc(10 / 15 * 100%);
+  }
+  .ruler__num--15 {
+    right: 0;
+    transform: none;
+  }
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .ruler__ad {
+        transform-origin: left;
+        animation: ruler-measure linear both;
+        animation-timeline: view();
+        animation-range: entry 20% cover 40%;
+      }
+    }
+  }
+  @keyframes ruler-measure {
+    from {
+      clip-path: inset(-2rem 100% 0 0);
+    }
+    to {
+      clip-path: inset(-2rem 0 0 0);
+    }
+  }
+
+  .short__grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-7) clamp(2rem, 4vw, 4rem);
+  }
+  .reason {
+    display: grid;
+    align-content: start;
+    gap: var(--space-3);
+  }
+  .reason__title {
+    font-size: var(--fs-xl);
+  }
+  .reason__text {
+    color: var(--ink-2);
+    max-width: 40ch;
+  }
+  @media (max-width: 52rem) {
+    .short__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .ruler__fade-label {
+      display: none;
+    }
+  }
+
+</style>

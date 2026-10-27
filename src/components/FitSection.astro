@@ -1,0 +1,93 @@
+---
+// src/components/FitSection.astro
+// Home page section that sends visitors to the questionnaire (/fit).
+import FitCta from './FitCta.astro';
+import { site } from '../config/site';
+import { questions } from '../data/questionnaire';
+---
+
+<section class="section fit" id="fit" aria-labelledby="fit-title">
+  <div class="wrap fit__grid">
+    <div class="fit__head">
+      <h2 id="fit-title">See if we’re a good fit</h2>
+      <p class="lede">
+        {questions.length} one-choice questions about your ads, your numbers, and your budget. It takes about two minutes,
+        and the answers come straight to Edward.
+      </p>
+      <FitCta />
+      <p class="small-print fit__email">
+        Prefer email? Write to <a class="link" href={`mailto:${site.email}`}>{site.email}</a>
+        <button class="btn btn--outline btn--small fit__copy" type="button" data-copy={site.email} aria-describedby="copy-status">
+          <span data-copy-label>Copy address</span>
+        </button>
+        <span id="copy-status" class="visually-hidden" role="status" aria-live="polite"></span>
+      </p>
+    </div>
+
+    <div class="fit__card">
+      <p class="fit__card-title">What the questionnaire asks</p>
+      <ol class="fit__list">
+        {questions.map((q) => <li>{q.legend}</li>)}
+      </ol>
+    </div>
+  </div>
+</section>
+
+<style>
+  .fit__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    gap: var(--space-8) clamp(2rem, 6vw, 7rem);
+    align-items: start;
+  }
+  .fit__head {
+    display: grid;
+    justify-items: start;
+    gap: var(--space-5);
+  }
+  .fit__head h2 {
+    font-size: var(--fs-3xl);
+  }
+  .fit__email {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+  }
+  .fit__card {
+    padding: clamp(1.5rem, 1rem + 2vw, 2.75rem);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-m);
+    background: var(--bg-raised);
+  }
+  .fit__card-title {
+    margin-bottom: var(--space-4);
+    font-family: var(--font-display);
+    font-size: var(--fs-xl);
+    line-height: 1.1;
+  }
+  .fit__list {
+    display: grid;
+    list-style: none;
+    counter-reset: q;
+  }
+  .fit__list li {
+    counter-increment: q;
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    padding-block: var(--space-3);
+    border-bottom: 1px dashed var(--line-strong);
+    color: var(--ink-2);
+  }
+  .fit__list li::before {
+    content: counter(q);
+    font-family: var(--font-display);
+    color: var(--mark);
+  }
+  @media (max-width: 52rem) {
+    .fit__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

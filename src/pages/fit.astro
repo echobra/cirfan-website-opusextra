@@ -1,0 +1,366 @@
+---
+// src/pages/fit.astro
+// The "See if we're a good fit" questionnaire. Questions and answers live in src/data/questionnaire.ts.
+// The form posts to /api/fit (api/fit.ts). It works without JavaScript; the script only adds the
+// progress counter and prevents double submits.
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { questions, limits, disqualifiers } from '../data/questionnaire';
+
+const disqualifying = (questionId: string, value: string) => (disqualifiers[questionId] ?? []).includes(value);
+---
+
+<BaseLayout
+  title="See if we’re a good fit | cirfan"
+  description="A short questionnaire about your ads, revenue, margin, and creative budget. It shows whether cirfan can help before any work starts."
+>
+  <section class="page-head">
+    <div class="wrap page-head__inner">
+      <h1 class="fit-title">See if we’re a good fit</h1>
+      <p class="lede">
+        {questions.length} one-choice questions, then where to reach you. About two minutes. Your answers come straight
+        to Edward, and you’ll hear back by email.
+      </p>
+    </div>
+  </section>
+
+  <section class="section questionnaire">
+    <div class="wrap questionnaire__grid">
+      <aside class="progress" aria-hidden="true">
+        <p class="progress__count"><span data-progress-count>0</span> of {questions.length} answered</p>
+        <span class="progress__tape"><span class="progress__fill" data-progress-fill></span></span>
+        <p class="small-print progress__why">
+          Revenue, margin, and budget help decide whether a project makes sense for you. They’re never sold or used for
+          marketing.
+        </p>
+      </aside>
+
+      <form class="form" method="post" action="/api/fit" data-fit-form>
+        {
+          questions.map((q, i) => (
+            <fieldset class="q" data-question>
+              <legend class="q__legend">
+                <span class="q__num">{i + 1}</span>
+                <span>{q.legend}</span>
+              </legend>
+              {q.hint && <p class="q__hint">{q.hint}</p>}
+              <div class="q__options">
+                {q.options.map((o, j) => (
+                  <label class:list={['choice', { 'choice--stop': disqualifying(q.id, o.value) }]}>
+                    <input type="radio" name={q.id} value={o.value} required={j === 0} />
+                    <span>{o.label}</span>
+                  </label>
+                ))}
+              </div>
+              {Object.keys(disqualifiers).includes(q.id) && (
+                <p class="q__stop">
+                  cirfan can’t take on projects without a creative budget. You can still submit to see the result;
+                  nothing will be sent or saved.
+                </p>
+              )}
+            </fieldset>
+          ))
+        }
+
+        <fieldset class="q q--contact">
+          <legend class="q__legend">
+            <span class="q__num">{questions.length + 1}</span>
+            <span>Where can we reach you?</span>
+          </legend>
+          <div class="fields">
+            <label class="field">
+              <span class="field__label">Name</span>
+              <input class="field__input" type="text" name="name" autocomplete="name" maxlength={limits.name} required />
+            </label>
+            <label class="field">
+              <span class="field__label">Email</span>
+              <input class="field__input" type="email" name="email" autocomplete="email" maxlength={limits.email} required />
+            </label>
+            <label class="field field--wide">
+              <span class="field__label">Brand website <span class="field__optional">optional</span></span>
+              <input
+                class="field__input"
+                type="text"
+                name="website"
+                inputmode="url"
+                autocomplete="url"
+                placeholder="yourbrand.com"
+                maxlength={limits.website}
+              />
+            </label>
+            <label class="field field--wide">
+              <span class="field__label">Anything else? <span class="field__optional">optional</span></span>
+              <textarea class="field__input" name="notes" rows="4" maxlength={limits.notes}></textarea>
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Spam trap. Hidden from people and screen readers; bots tend to fill it in. -->
+        <div class="trap" aria-hidden="true">
+          <label>Company site <input type="text" name="company_site" tabindex="-1" autocomplete="off" /></label>
+        </div>
+
+        <div class="form__submit">
+          <button class="btn btn--primary" type="submit" data-submit>Send my answers</button>
+          <p class="small-print">
+            Your answers are used only to decide whether cirfan can help and to reply to you. They are delivered by email
+            through Resend, a US-based service. See the <a href="/policies/privacy">privacy notice</a>.
+          </p>
+        </div>
+      </form>
+    </div>
+  </section>
+</BaseLayout>
+
+<script>
+  import '../scripts/fit';
+</script>
+
+<style>
+  .fit-title {
+    max-width: 12ch;
+  }
+
+  .questionnaire {
+    padding-top: var(--space-8);
+  }
+  .questionnaire__grid {
+    display: grid;
+    grid-template-columns: minmax(12rem, 16rem) minmax(0, 46rem);
+    gap: var(--space-7) clamp(2rem, 6vw, 7rem);
+    align-items: start;
+  }
+
+  /* Progress: a short tape that fills as questions are answered (JavaScript only). */
+  .progress {
+    position: sticky;
+    top: calc(var(--header-h) + 2rem);
+    display: grid;
+    gap: var(--space-4);
+    visibility: hidden;
+  }
+  :global(.js) .progress {
+    visibility: visible;
+  }
+  .progress__count {
+    font-family: var(--font-display);
+    font-size: var(--fs-xl);
+    line-height: 1.1;
+  }
+  .progress__tape {
+    position: relative;
+    display: block;
+    height: 12px;
+    color: var(--line-strong);
+    border-right: 1px solid currentColor;
+    background:
+      linear-gradient(currentColor, currentColor) bottom / 100% 1px no-repeat,
+      repeating-linear-gradient(to right, currentColor 0 1px, transparent 1px calc(100% / 9)) bottom / 100% 12px no-repeat;
+  }
+  .progress__fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: var(--mark);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.45s var(--ease);
+  }
+
+  .form {
+    --indent: calc(2rem + var(--space-4));
+    display: grid;
+    gap: var(--space-8);
+  }
+
+  .q {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+  }
+  .q__legend {
+    display: flex;
+    gap: var(--space-4);
+    padding: 0;
+    margin-bottom: var(--space-4);
+    font-family: var(--font-display);
+    font-size: var(--fs-xl);
+    line-height: 1.2;
+  }
+  .q__num {
+    flex: none;
+    width: 2rem;
+    color: var(--mark);
+  }
+  .q__hint {
+    margin: calc(var(--space-2) * -1) 0 var(--space-4) var(--indent);
+    font-size: var(--fs-sm);
+    color: var(--ink-3);
+  }
+
+  .q__options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    padding-left: var(--indent);
+  }
+
+  /* Radio buttons styled as choices. The real input stays in place for keyboards and screen readers. */
+  .choice {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.75rem;
+    padding: 0.55rem 1.1rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      border-color 0.2s var(--ease-out),
+      background-color 0.2s var(--ease-out),
+      color 0.2s var(--ease-out);
+  }
+  .choice:hover {
+    border-color: var(--ink);
+  }
+  .choice input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .choice:has(input:checked) {
+    background: var(--btn-bg);
+    border-color: var(--btn-bg);
+    color: var(--btn-ink);
+  }
+  .choice:has(input:focus-visible) {
+    outline: 2px solid var(--mark);
+    outline-offset: 3px;
+  }
+
+  .q__stop {
+    display: none;
+    margin: var(--space-4) 0 0 var(--indent);
+    padding: var(--space-3) var(--space-4);
+    border-left: 3px solid var(--mark);
+    background: var(--bg-raised);
+    font-size: var(--fs-sm);
+    color: var(--ink);
+  }
+  /* Shown as soon as a disqualifying answer is picked. Pure CSS, no JavaScript needed. */
+  .q:has(.choice--stop input:checked) .q__stop {
+    display: block;
+  }
+
+  .fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+    padding-left: var(--indent);
+  }
+  .field {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .field--wide {
+    grid-column: 1 / -1;
+  }
+  .field__label {
+    font-size: var(--fs-sm);
+    font-weight: 500;
+  }
+  .field__optional {
+    margin-left: 0.35em;
+    font-weight: 400;
+    color: var(--ink-3);
+  }
+  .field__input {
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-s);
+    background: var(--bg-raised);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--fs-base);
+    transition: border-color 0.2s var(--ease-out);
+  }
+  .field__input:hover {
+    border-color: var(--ink-3);
+  }
+  .field__input:focus-visible {
+    border-color: var(--mark);
+    outline-offset: 1px;
+  }
+  textarea.field__input {
+    resize: vertical;
+    min-height: 7rem;
+  }
+
+  .trap {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .form__submit {
+    display: grid;
+    justify-items: start;
+    gap: var(--space-4);
+    padding-left: var(--indent);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--line);
+  }
+  .form__submit .small-print {
+    max-width: 52ch;
+  }
+  .form__submit a {
+    color: var(--ink);
+    text-decoration-color: var(--mark);
+    text-underline-offset: 0.2em;
+  }
+  .form__submit [data-submit][aria-disabled='true'] {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  @media (max-width: 52rem) {
+    .questionnaire__grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .progress {
+      position: sticky;
+      top: var(--header-h);
+      z-index: 5;
+      padding-block: var(--space-3);
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
+    }
+    .progress__count {
+      font-size: var(--fs-lg);
+    }
+    .progress__why {
+      display: none;
+    }
+    .q__hint,
+    .q__options,
+    .q__stop,
+    .fields,
+    .form__submit {
+      padding-left: 0;
+      margin-left: 0;
+    }
+    .fields {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

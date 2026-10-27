@@ -1,0 +1,15 @@
+---
+// src/pages/not-sent.astro
+import FitResult from '../components/FitResult.astro';
+import { site } from '../config/site';
+---
+
+<FitResult title="Not sent" heading="That didn’t go through.">
+  <p class="lede">
+    An answer was missing or the message couldn’t be delivered, so nothing was saved. Try again, or email
+    <a class="link" href={`mailto:${site.email}`}>{site.email}</a> directly.
+  </p>
+  <div class="result__actions">
+    <a class="btn btn--primary" href="/fit">Back to the questionnaire</a>
+  </div>
+</FitResult>
