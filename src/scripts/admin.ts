@@ -217,6 +217,8 @@ searchEl.addEventListener('input', renderList);
 
 // ---------- Detail ----------
 async function select(id: string | null) {
+  if (bulkRunning && id) return;
+  if (id) document.querySelector('[data-bulk]')?.toggleAttribute('hidden', true);
   if (id !== state.selected) state.view = { kind: 'root' };
   state.selected = id;
   const url = new URL(location.href);
@@ -614,13 +616,27 @@ const confirmAction = async (title: string, text: string, typeToConfirm?: string
   (await openConfirm(title, text, typeToConfirm ? { label: `Type “${typeToConfirm}” to confirm`, value: '', mustEqual: typeToConfirm } : undefined)) !== null;
 const promptText = (title: string, label: string, value: string) => openConfirm(title, '', { label, value });
 
-// ---------- Uploads (files and whole folders) ----------
-type Pending = { file: File; folderName: string | null };
+// ---------- Uploads (shared by one-client uploads and bulk uploads) ----------
+type Pending = { file: File; path: string[] };
+type Job = { file: File; folderId: string | null; li: HTMLLIElement };
+type BatchResult = { succeeded: number; failed: number; touched: Set<string>; cutOff: boolean };
 
-const drop = $<HTMLLabelElement>('[data-drop]');
-const fileInput = $<HTMLInputElement>('[data-file-input]');
-const folderInput = $<HTMLInputElement>('[data-folder-input]');
-const queueEl = $<HTMLUListElement>('[data-queue]');
+const queueTpl = () => $<HTMLTemplateElement>('#tpl-queue');
+
+function queueRow(container: HTMLElement, label: string) {
+  const li = queueTpl().content.firstElementChild!.cloneNode(true) as HTMLLIElement;
+  $('.queue__name', li).textContent = label;
+  container.append(li);
+  return li;
+}
+
+/** Why a file can't be uploaded, or null if it can. Checked before anything is sent. */
+const skipReason = (file: File) =>
+  SYSTEM_FILES.test(file.name) || !SUPPORTED.test(file.name)
+    ? 'Skipped: not a supported file'
+    : file.size > MAX_UPLOAD_BYTES
+      ? `Skipped: ${size(file.size)} is over the 200 MB limit`
+      : null;
 
 const putWithProgress = (url: string, file: File, contentType: string, onProgress: (p: number) => void) =>
   new Promise<void>((resolve, reject) => {
@@ -633,8 +649,68 @@ const putWithProgress = (url: string, file: File, contentType: string, onProgres
     xhr.send(file);
   });
 
-// Walks dropped folders (including subfolders). Everything inside one dropped folder lands in one folder.
-async function fromDrop(items: DataTransferItemList): Promise<Pending[]> {
+/** Uploads two files at a time and processes them one at a time. Never throws; every outcome is shown on its line. */
+async function runJobs(clientId: string, jobs: Job[], onDone?: () => void): Promise<BatchResult> {
+  const result: BatchResult = { succeeded: 0, failed: 0, touched: new Set(), cutOff: false };
+  const runJob = async ({ file, folderId, li }: Job) => {
+    const status = $('.queue__status', li);
+    const bar = $<HTMLElement>('.queue__bar span', li);
+    let timer = 0;
+    try {
+      status.textContent = 'Uploading';
+      const { url, key, contentType } = await api<{ url: string; key: string; contentType: string }>('upload-url', {
+        id: clientId,
+        fileName: file.name,
+        size: file.size,
+      });
+      await putWithProgress(url, file, contentType, (p) => (bar.style.transform = `scaleX(${p})`));
+      status.textContent = 'Uploaded, waiting for its turn to process';
+      const done = await oneAtATime(() => {
+        const started = Date.now();
+        const tick = () => {
+          const s = Math.floor((Date.now() - started) / 1000);
+          status.textContent = `Removing metadata, converting if needed (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')})`;
+        };
+        tick();
+        timer = window.setInterval(tick, 1000);
+        return api<{ converted_from?: string }>('process', { id: clientId, key, fileName: file.name, folderId });
+      });
+      status.textContent = done.converted_from ? `Ready, converted from ${done.converted_from} to H.264 so it plays everywhere` : 'Ready';
+      result.succeeded++;
+      if (folderId) result.touched.add(folderId);
+    } catch (e) {
+      const err = e as Error & { reason?: string };
+      if (err.message === 'cloudflare_timeout') result.cutOff = true;
+      const known = UPLOAD_ERRORS[err.message];
+      status.textContent = known ? `${known}${err.reason ? ` (${err.reason})` : ''}` : `Failed: ${err.message}`;
+      status.classList.add('is-error');
+      result.failed++;
+    } finally {
+      window.clearInterval(timer);
+      onDone?.();
+    }
+  };
+  const queue = [...jobs];
+  await Promise.all(
+    [0, 1].map(async () => {
+      while (queue.length) await runJob(queue.shift()!);
+    }),
+  );
+  return result;
+}
+
+/** Sends the "new files" email if the client is eligible. Returns a short line for the queue or summary. */
+async function notifyClient(clientId: string, count: number, folderIds: string[]) {
+  try {
+    const { sent, reason } = await api<{ sent: boolean; reason?: string }>('notify', { id: clientId, count, folderIds });
+    return sent ? 'Client emailed' : `Not emailed: ${(NOTIFY_STATES[reason ?? ''] ?? reason ?? '').toLowerCase()}`;
+  } catch (e) {
+    return `Not emailed: ${(e as Error).message}`;
+  }
+}
+
+// Reads dropped files and folders, keeping each file's path (folder names, then the file name).
+async function collectDrop(items: DataTransferItemList): Promise<Pending[]> {
   const out: Pending[] = [];
   const readDir = (dir: FileSystemDirectoryEntry) =>
     new Promise<FileSystemEntry[]>((resolve, reject) => {
@@ -651,132 +727,377 @@ async function fromDrop(items: DataTransferItemList): Promise<Pending[]> {
       next();
     });
   const fileOf = (entry: FileSystemFileEntry) => new Promise<File>((resolve, reject) => entry.file(resolve, reject));
-  const walk = async (entry: FileSystemEntry, top: string | null): Promise<void> => {
-    if (entry.isFile) out.push({ file: await fileOf(entry as FileSystemFileEntry), folderName: top });
-    else for (const child of await readDir(entry as FileSystemDirectoryEntry)) await walk(child, top ?? entry.name);
+  const walk = async (entry: FileSystemEntry, parents: string[]): Promise<void> => {
+    if (entry.isFile) out.push({ file: await fileOf(entry as FileSystemFileEntry), path: [...parents, entry.name] });
+    else for (const child of await readDir(entry as FileSystemDirectoryEntry)) await walk(child, [...parents, entry.name]);
   };
   const entries = Array.from(items)
     .map((i) => i.webkitGetAsEntry?.())
     .filter((e): e is FileSystemEntry => Boolean(e));
-  for (const entry of entries) await walk(entry, null);
+  for (const entry of entries) await walk(entry, []);
   return out;
 }
 
-async function uploadAll(pending: Pending[]) {
+const fromFolderInput = (input: HTMLInputElement): Pending[] =>
+  Array.from(input.files ?? []).map((file) => ({
+    file,
+    path: ((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name).split('/'),
+  }));
+
+// ---------- One client: files and folders dropped on its page ----------
+const drop = $<HTMLLabelElement>('[data-drop]');
+const fileInput = $<HTMLInputElement>('[data-file-input]');
+const folderInput = $<HTMLInputElement>('[data-folder-input]');
+const queueEl = $<HTMLUListElement>('[data-queue]');
+
+async function uploadToSelected(pending: Pending[]) {
   const id = state.selected;
   if (!id || !pending.length) return;
   const targetFolder = state.view.kind === 'folder' ? state.view.id : null;
-  const tpl = $<HTMLTemplateElement>('#tpl-queue');
 
-  // One folder per dropped folder name (reuses an active folder with the same name).
+  // Everything inside one dropped folder lands in one folder on the page (reusing an active one with that name).
   const folderIds = new Map<string, string>();
-  for (const name of new Set(pending.map((p) => p.folderName).filter((n): n is string => Boolean(n)))) {
+  for (const name of new Set(pending.filter((p) => p.path.length > 1).map((p) => p.path[0]))) {
     const { folder } = await api<{ folder: FolderRow }>('create-folder', { id, name, reuse: true });
     folderIds.set(name, folder.id);
   }
 
-  // Unsupported and oversized files are marked straight away and never wait in the queue.
-  const jobs: { file: File; folderId: string | null; li: HTMLLIElement }[] = [];
-  for (const { file, folderName } of pending) {
-    const li = tpl.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
+  const jobs: Job[] = [];
+  for (const { file, path } of pending) {
+    const folderName = path.length > 1 ? path[0] : null;
+    const li = queueRow(queueEl, folderName ? `${folderName} / ${file.name}` : file.name);
+    const skip = skipReason(file);
     const status = $('.queue__status', li);
-    $('.queue__name', li).textContent = folderName ? `${folderName} / ${file.name}` : file.name;
-    queueEl.append(li);
-    if (SYSTEM_FILES.test(file.name) || !SUPPORTED.test(file.name)) {
-      status.textContent = 'Skipped: not a supported file';
-    } else if (file.size > MAX_UPLOAD_BYTES) {
-      status.textContent = `Skipped: ${size(file.size)} is over the 200 MB limit`;
-      status.classList.add('is-error');
-    } else {
-      status.textContent = 'Waiting';
-      jobs.push({ file, folderId: folderName ? folderIds.get(folderName)! : targetFolder, li });
-    }
+    status.textContent = skip ?? 'Waiting';
+    if (skip) status.classList.toggle('is-error', skip.includes('limit'));
+    else jobs.push({ file, folderId: folderName ? folderIds.get(folderName)! : targetFolder, li });
   }
 
-  let succeeded = 0;
-  let cutOffByCloudflare = false;
-  const touched = new Set<string>();
-  const runJob = async ({ file, folderId, li }: (typeof jobs)[number]) => {
-    const status = $('.queue__status', li);
-    const bar = $<HTMLElement>('.queue__bar span', li);
-    let timer = 0;
-    try {
-      status.textContent = 'Uploading';
-      const { url, key, contentType } = await api<{ url: string; key: string; contentType: string }>('upload-url', {
-        id,
-        fileName: file.name,
-        size: file.size,
-      });
-      await putWithProgress(url, file, contentType, (p) => (bar.style.transform = `scaleX(${p})`));
-      status.textContent = 'Uploaded, waiting for its turn to process';
-      const result = await oneAtATime(() => {
-        const started = Date.now();
-        const tick = () => {
-          const s = Math.floor((Date.now() - started) / 1000);
-          status.textContent = `Removing metadata, converting if needed (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')})`;
-        };
-        tick();
-        timer = window.setInterval(tick, 1000);
-        return api<{ converted_from?: string }>('process', { id, key, fileName: file.name, folderId });
-      });
-      status.textContent = result.converted_from ? `Ready, converted from ${result.converted_from} to H.264 so it plays everywhere` : 'Ready';
-      succeeded++;
-      if (folderId) touched.add(folderId);
-    } catch (e) {
-      const err = e as Error & { reason?: string };
-      if (err.message === 'cloudflare_timeout') cutOffByCloudflare = true;
-      const known = UPLOAD_ERRORS[err.message];
-      status.textContent = known ? `${known}${err.reason ? ` (${err.reason})` : ''}` : `Failed: ${err.message}`;
-      status.classList.add('is-error');
-    } finally {
-      window.clearInterval(timer);
-    }
-  };
-
-  // Two at a time: quicker for folders of creatives, still within the function limits.
-  const queue = [...jobs];
-  await Promise.all(
-    [0, 1].map(async () => {
-      while (queue.length) await runJob(queue.shift()!);
-    }),
-  );
-
+  const result = await runJobs(id, jobs);
   const notify = $<HTMLInputElement>('[data-notify]');
-  if (succeeded > 0 && notify.checked && !notify.disabled) {
-    const li = tpl.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
-    $('.queue__name', li).textContent = 'Client email';
-    queueEl.append(li);
-    try {
-      const { sent, reason } = await api<{ sent: boolean; reason?: string }>('notify', { id, count: succeeded, folderIds: [...touched] });
-      $('.queue__status', li).textContent = sent ? `Sent to ${state.client?.notify_email}` : `Not sent: ${NOTIFY_STATES[reason ?? ''] ?? reason}`;
-    } catch (e) {
-      $('.queue__status', li).textContent = `Not sent: ${(e as Error).message}`;
-      $('.queue__status', li).classList.add('is-error');
-    }
+  if (result.succeeded > 0 && notify.checked && !notify.disabled) {
+    const li = queueRow(queueEl, 'Client email');
+    $('.queue__status', li).textContent = await notifyClient(id, result.succeeded, [...result.touched]);
   }
   fileInput.value = '';
   folderInput.value = '';
   await refresh();
   // Requests Cloudflare cut off keep running on the server; look again for files that finished late.
-  if (cutOffByCloudflare) [60_000, 180_000, 300_000].forEach((ms) => setTimeout(() => refresh(), ms));
+  if (result.cutOff) [60_000, 180_000, 300_000].forEach((ms) => setTimeout(() => refresh(), ms));
 }
 
-fileInput.addEventListener('change', () => fileInput.files && uploadAll(Array.from(fileInput.files).map((file) => ({ file, folderName: null }))));
+fileInput.addEventListener('change', () => fileInput.files && uploadToSelected(Array.from(fileInput.files).map((file) => ({ file, path: [file.name] }))));
 $('[data-pick-folder]').addEventListener('click', () => folderInput.click());
-folderInput.addEventListener('change', () => {
-  if (!folderInput.files) return;
-  uploadAll(
-    Array.from(folderInput.files).map((file) => ({
-      file,
-      folderName: (file as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/')[0] || null,
-    })),
-  );
-});
+folderInput.addEventListener('change', () => uploadToSelected(fromFolderInput(folderInput)));
 ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => (e.preventDefault(), drop.classList.add('is-over'))));
 ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, () => drop.classList.remove('is-over')));
 drop.addEventListener('drop', async (e) => {
   e.preventDefault();
-  if (e.dataTransfer?.items.length) uploadAll(await fromDrop(e.dataTransfer.items));
+  if (e.dataTransfer?.items.length) uploadToSelected(await collectDrop(e.dataTransfer.items));
+});
+
+// ---------- Bulk upload: many clients in one drop ----------
+// Top folder = client page (matched by name), folder inside it = folder on that page, files inside = deliverables.
+type ClientPlan = {
+  folder: string;
+  target: string; // client id, 'new' to create a page, or '' to skip
+  matches: ClientRow[];
+  loose: Pending[];
+  subfolders: Map<string, Pending[]>;
+  existing: Set<string>; // "folder name|file name" already on the page
+};
+
+const bulkPanel = $<HTMLElement>('[data-bulk]');
+const bulkDrop = $<HTMLLabelElement>('[data-bulk-drop]');
+const bulkInput = $<HTMLInputElement>('[data-bulk-input]');
+let plans: ClientPlan[] = [];
+let bulkRunning = false;
+
+const normalize = (s: string) =>
+  s
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+// The page id is "<name-slug>-<12 random characters>"; the slug also counts as a name.
+const slugOf = (id: string) => id.replace(/-[a-z2-9]{12}$/, '').replace(/-/g, ' ');
+const matchesFor = (folder: string) => state.clients.filter((c) => normalize(c.name) === normalize(folder) || slugOf(c.id) === normalize(folder));
+
+// The name a file will have once processed: same cleaning as the server, and videos always end in .mp4.
+const storedName = (name: string) => {
+  const clean = (name.normalize('NFKD').replace(/[^\w.\- ]+/g, '').replace(/\s+/g, ' ').trim() || 'file').slice(0, 120);
+  return /\.(mp4|m4v|mov|webm)$/i.test(clean) ? clean.replace(/\.[^.]+$/, '.mp4') : clean;
+};
+const existingKey = (folder: string, file: string) => `${normalize(folder)}|${storedName(file).toLowerCase()}`;
+
+function showBulk(open: boolean) {
+  bulkPanel.toggleAttribute('hidden', !open);
+  if (open) {
+    $('[data-detail-empty]').toggleAttribute('hidden', true);
+    $('[data-detail]').toggleAttribute('hidden', true);
+  } else select(state.selected);
+}
+
+$('[data-bulk-open]').addEventListener('click', () => {
+  if (state.selected) {
+    state.selected = null;
+    renderList();
+  }
+  showBulk(true);
+});
+$('[data-bulk-close]').addEventListener('click', () => !bulkRunning && showBulk(false));
+
+async function planFrom(pending: Pending[]) {
+  if (!pending.length) return;
+  await loadList();
+  let items = pending.filter((p) => !SYSTEM_FILES.test(p.file.name));
+  const note: string[] = [];
+
+  // Dropped the folder that holds the client folders (e.g. "cirfan-client-work")? Look one level inside it.
+  const tops = new Set(items.map((p) => p.path[0]));
+  if (tops.size === 1 && items.every((p) => p.path.length > 2) && !matchesFor(items[0].path[0]).length) {
+    note.push(`“${items[0].path[0]}” holds the client folders, so the folders inside it are used.`);
+    items = items.map((p) => ({ ...p, path: p.path.slice(1) }));
+  }
+  const strays = items.filter((p) => p.path.length < 2);
+  if (strays.length) note.push(`${strays.length} file${strays.length === 1 ? ' is' : 's are'} not inside a client folder and will be ignored.`);
+  if (items.some((p) => p.path.length > 3)) note.push('Folders more than one level inside a client folder are merged into their parent folder.');
+
+  const byClient = new Map<string, Pending[]>();
+  for (const p of items.filter((x) => x.path.length >= 2)) {
+    if (!byClient.has(p.path[0])) byClient.set(p.path[0], []);
+    byClient.get(p.path[0])!.push(p);
+  }
+
+  plans = await Promise.all(
+    [...byClient.entries()].map(async ([folder, files]): Promise<ClientPlan> => {
+      const matches = matchesFor(folder);
+      const subfolders = new Map<string, Pending[]>();
+      const loose: Pending[] = [];
+      for (const p of files) {
+        if (p.path.length === 2) loose.push(p);
+        else {
+          if (!subfolders.has(p.path[1])) subfolders.set(p.path[1], []);
+          subfolders.get(p.path[1])!.push(p);
+        }
+      }
+      const plan: ClientPlan = { folder, target: matches.length === 1 ? matches[0].id : '', matches, loose, subfolders, existing: new Set() };
+      if (plan.target) await loadExisting(plan);
+      return plan;
+    }),
+  );
+  plans.sort((a, b) => a.folder.localeCompare(b.folder));
+  $('[data-bulk-note]').textContent = note.join(' ');
+  renderPlan();
+}
+
+async function loadExisting(plan: ClientPlan) {
+  plan.existing = new Set();
+  if (!plan.target || plan.target === 'new') return;
+  const { folders, files } = await api<{ folders: FolderRow[]; files: FileRow[] }>('get', { id: plan.target });
+  const nameOf = (folderId: string | null) => (folderId ? folders.find((f) => f.id === folderId)?.name ?? '' : '');
+  for (const f of files) {
+    const folder = folders.find((x) => x.id === f.folder_id);
+    if (folder?.archived_at) continue; // an archived folder never receives new files, so its contents don't count
+    plan.existing.add(existingKey(nameOf(f.folder_id), f.file_name));
+  }
+}
+
+const planCounts = (plan: ClientPlan) => {
+  const all = [...plan.loose.map((p) => ({ p, folder: '' })), ...[...plan.subfolders].flatMap(([folder, ps]) => ps.map((p) => ({ p, folder })))];
+  const skipIfExisting = $<HTMLInputElement>('[data-bulk-skip-existing]').checked;
+  const already = all.filter(({ p, folder }) => skipIfExisting && plan.existing.has(existingKey(folder, p.file.name))).length;
+  const invalid = all.filter(({ p }) => skipReason(p.file)).length;
+  return { total: all.length, already, invalid, upload: all.length - already - invalid };
+};
+
+function renderPlan() {
+  const body = $<HTMLTableSectionElement>('[data-bulk-rows]');
+  body.replaceChildren();
+  for (const plan of plans) {
+    const tr = document.createElement('tr');
+    const name = document.createElement('td');
+    name.textContent = plan.folder;
+    const target = document.createElement('td');
+    const select = document.createElement('select');
+    select.className = 'input input--small';
+    select.setAttribute('aria-label', `Client page for ${plan.folder}`);
+    const add = (value: string, label: string) => {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = label;
+      o.selected = value === plan.target;
+      select.append(o);
+    };
+    add('', plan.matches.length > 1 ? 'Several pages match: choose one' : 'No matching page: skip');
+    add('new', `Create a new page “${plan.folder}”`);
+    for (const c of state.clients) add(c.id, plan.matches.some((m) => m.id === c.id) ? `${c.name} (match)` : c.name);
+    select.addEventListener('change', async () => {
+      plan.target = select.value;
+      await loadExisting(plan);
+      renderPlan();
+    });
+    target.append(select);
+    const contents = document.createElement('td');
+    const c = planCounts(plan);
+    const folderList = [...plan.subfolders.keys()];
+    contents.textContent = [
+      folderList.length ? `Folders: ${folderList.join(', ')}` : 'No folders',
+      plan.loose.length ? `${plan.loose.length} loose` : '',
+      `${c.upload} to upload`,
+      c.already ? `${c.already} already on the page` : '',
+      c.invalid ? `${c.invalid} skipped (type or size)` : '',
+    ]
+      .filter(Boolean)
+      .join(', ');
+    tr.append(name, target, contents);
+    if (!plan.target) tr.className = 'is-skipped';
+    body.append(tr);
+  }
+  const ready = plans.filter((p) => p.target && planCounts(p).upload > 0);
+  $<HTMLButtonElement>('[data-bulk-start]').disabled = ready.length === 0;
+  $('[data-bulk-summary]').textContent = ready.length
+    ? `${ready.reduce((n, p) => n + planCounts(p).upload, 0)} files for ${ready.length} client page${ready.length === 1 ? '' : 's'}.`
+    : 'Nothing to upload yet. Pick a page for each folder you want to send.';
+  $('[data-bulk-plan]').toggleAttribute('hidden', plans.length === 0);
+  $('[data-bulk-run]').toggleAttribute('hidden', true);
+}
+
+$('[data-bulk-skip-existing]').addEventListener('change', renderPlan);
+
+// Keeps the screen awake and warns before closing the tab while a bulk upload runs.
+let wakeLock: { release: () => Promise<void> } | null = null;
+const guardLeave = (e: BeforeUnloadEvent) => {
+  e.preventDefault();
+  e.returnValue = '';
+};
+
+$('[data-bulk-start]').addEventListener('click', async () => {
+  const work = plans.filter((p) => p.target && planCounts(p).upload > 0);
+  if (!work.length || bulkRunning) return;
+  bulkRunning = true;
+  const emailClients = $<HTMLInputElement>('[data-bulk-email]').checked;
+  const skipIfExisting = $<HTMLInputElement>('[data-bulk-skip-existing]').checked;
+  $('[data-bulk-plan]').toggleAttribute('hidden', true);
+  $('[data-bulk-run]').toggleAttribute('hidden', false);
+  $<HTMLButtonElement>('[data-bulk-close]').disabled = true;
+  window.addEventListener('beforeunload', guardLeave);
+  try {
+    wakeLock = await (navigator as Navigator & { wakeLock?: { request: (t: string) => Promise<{ release: () => Promise<void> }> } }).wakeLock?.request('screen') ?? null;
+  } catch {
+    wakeLock = null;
+  }
+
+  const runList = $<HTMLUListElement>('[data-bulk-progress]');
+  runList.replaceChildren();
+  const totalFiles = work.reduce((n, p) => n + planCounts(p).upload, 0);
+  let finished = 0;
+  const tickTitle = () => (document.title = `${finished} of ${totalFiles} | Bulk upload | cirfan`);
+  tickTitle();
+  const summary: string[] = [];
+  let cutOff = false;
+
+  // One client after another, so each client's email goes out as soon as their files are ready.
+  for (const plan of work) {
+    const li = document.createElement('li');
+    li.className = 'bulk-client';
+    const head = document.createElement('p');
+    head.className = 'bulk-client__head';
+    const title = document.createElement('strong');
+    const status = document.createElement('span');
+    head.append(title, status);
+    const details = document.createElement('details');
+    const summ = document.createElement('summary');
+    summ.textContent = 'Files';
+    const files = document.createElement('ul');
+    files.className = 'queue';
+    details.append(summ, files);
+    li.append(head, details);
+    runList.append(li);
+    title.textContent = plan.folder;
+    status.textContent = 'Preparing';
+
+    try {
+      let clientId = plan.target;
+      let created: ClientRow | null = null;
+      if (clientId === 'new') {
+        ({ client: created } = await api<{ client: ClientRow }>('create', { name: plan.folder, contactMethod: 'email', contactDetail: '' }));
+        clientId = created.id;
+      }
+      const clientName = created?.name ?? state.clients.find((c) => c.id === clientId)?.name ?? plan.folder;
+      title.textContent = `${plan.folder} → ${clientName}`;
+
+      const folderIds = new Map<string, string>();
+      for (const name of plan.subfolders.keys()) {
+        const { folder } = await api<{ folder: FolderRow }>('create-folder', { id: clientId, name, reuse: true });
+        folderIds.set(name, folder.id);
+      }
+      const jobs: Job[] = [];
+      const entries = [...plan.loose.map((p) => ({ p, folder: '' })), ...[...plan.subfolders].flatMap(([folder, ps]) => ps.map((p) => ({ p, folder })))];
+      for (const { p, folder } of entries) {
+        const row = queueRow(files, folder ? `${folder} / ${p.file.name}` : p.file.name);
+        const rowStatus = $('.queue__status', row);
+        const skip = skipReason(p.file) ?? (skipIfExisting && plan.existing.has(existingKey(folder, p.file.name)) ? 'Skipped: already on the page' : null);
+        if (skip) rowStatus.textContent = skip;
+        else jobs.push({ file: p.file, folderId: folder ? folderIds.get(folder)! : null, li: row });
+      }
+
+      let done = 0;
+      status.textContent = `0 of ${jobs.length} ready`;
+      const result = await runJobs(clientId, jobs, () => {
+        done++;
+        finished++;
+        tickTitle();
+        status.textContent = `${done} of ${jobs.length} processed`;
+      });
+      cutOff ||= result.cutOff;
+
+      let emailLine = '';
+      if (created) emailLine = `New page, not emailed. Send the client this link: ${created.link}`;
+      else if (!emailClients) emailLine = 'Not emailed (turned off for this upload)';
+      else if (result.succeeded > 0) emailLine = await notifyClient(clientId, result.succeeded, [...result.touched]);
+      const line = `${result.succeeded} added${result.failed ? `, ${result.failed} failed` : ''}. ${emailLine}`.trim();
+      status.textContent = line;
+      if (result.failed) {
+        status.classList.add('is-error');
+        details.open = true;
+      }
+      summary.push(`${clientName}: ${line}`);
+    } catch (e) {
+      status.textContent = `Stopped: ${(e as Error).message}`;
+      status.classList.add('is-error');
+      summary.push(`${plan.folder}: stopped (${(e as Error).message})`);
+    }
+  }
+
+  document.title = `Done | Bulk upload | cirfan`;
+  window.removeEventListener('beforeunload', guardLeave);
+  await wakeLock?.release().catch(() => {});
+  bulkRunning = false;
+  $<HTMLButtonElement>('[data-bulk-close]').disabled = false;
+  const done = document.createElement('li');
+  done.className = 'bulk-client bulk-client--done';
+  done.textContent = 'All done. Each line above shows what was added and whether the client was emailed.';
+  runList.append(done);
+  const { posted } = await api<{ posted: boolean }>('bulk-summary', { lines: summary }).catch(() => ({ posted: false }));
+  if (posted) done.textContent += ' A summary was posted to Slack.';
+  bulkInput.value = '';
+  await loadList();
+  if (cutOff) [60_000, 180_000, 300_000].forEach((ms) => setTimeout(() => loadList(), ms));
+});
+
+$('[data-bulk-cancel]').addEventListener('click', () => {
+  plans = [];
+  $('[data-bulk-plan]').toggleAttribute('hidden', true);
+});
+$('[data-bulk-pick]').addEventListener('click', () => bulkInput.click());
+bulkInput.addEventListener('change', () => planFrom(fromFolderInput(bulkInput)));
+['dragenter', 'dragover'].forEach((t) => bulkDrop.addEventListener(t, (e) => (e.preventDefault(), bulkDrop.classList.add('is-over'))));
+['dragleave', 'drop'].forEach((t) => bulkDrop.addEventListener(t, () => bulkDrop.classList.remove('is-over')));
+bulkDrop.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  if (!bulkRunning && e.dataTransfer?.items.length) planFrom(await collectDrop(e.dataTransfer.items));
 });
 
 // ---------- Start ----------

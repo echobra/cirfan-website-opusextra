@@ -23,6 +23,7 @@ import {
 } from './_lib/storage.js';
 import { VIDEO_TYPES, IMAGE_TYPES, extensionOf, stripVideo, stripImage, ProcessingError } from './_lib/strip.js';
 import { EMAIL_PATTERN, notifyConfigured, sendUploadEmail } from './_lib/notify.js';
+import { escapeSlack, postToSlack } from './_lib/slack.js';
 
 // /tmp holds the original and the cleaned copy at once, and Vercel gives functions 512 MB of /tmp.
 const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
@@ -133,6 +134,20 @@ export async function POST(request: Request) {
       if (error) throw error;
       await logEvent(row.id, 'admin', 'page_created', { name }, meta);
       return json({ client: { ...row, link: linkFor(row.id) } });
+    }
+
+    // Optional: a summary of a bulk upload, posted to SLACK_ADMIN_WEBHOOK when it is set.
+    if (action === 'bulk-summary') {
+      if (!process.env.SLACK_ADMIN_WEBHOOK) return json({ posted: false, reason: 'not_configured' });
+      const lines = (Array.isArray(body.lines) ? body.lines : []).slice(0, 100).map((l) => escapeSlack(line(l, 400)));
+      const posted = await postToSlack(process.env.SLACK_ADMIN_WEBHOOK, {
+        text: 'Bulk upload finished',
+        blocks: [
+          { type: 'header', text: { type: 'plain_text', text: 'Bulk upload finished' } },
+          { type: 'section', text: { type: 'mrkdwn', text: lines.map((l) => `• ${l}`).join('\n').slice(0, 2900) || 'Nothing uploaded.' } },
+        ],
+      });
+      return json({ posted });
     }
 
     // Everything below works on one existing client page.
