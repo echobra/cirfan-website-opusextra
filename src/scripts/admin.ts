@@ -10,11 +10,31 @@ type ClientRow = {
   password_set_at: string | null;
   created_at: string;
   file_count: number;
+  folder_count?: number;
   last_client_activity: string | null;
+  notify_email?: string | null;
+  notify_enabled?: boolean;
+  notify_state?: string;
   link: string;
 };
-type FileRow = { id: string; file_name: string; kind: 'video' | 'image'; content_type: string; size_bytes: number; created_at: string; previewUrl: string };
+type FolderRow = { id: string; name: string; archived_at: string | null; created_at: string };
+type FileRow = {
+  id: string;
+  folder_id: string | null;
+  file_name: string;
+  kind: 'video' | 'image';
+  content_type: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  archived_at: string | null;
+  created_at: string;
+  previewUrl: string;
+};
 type EventRow = { id: number; actor: string; event: string; detail: Record<string, unknown>; ip: string | null; user_agent: string | null; created_at: string };
+
+// Which part of the Files block is showing: loose files, one folder, or the archive.
+type View = { kind: 'root' } | { kind: 'folder'; id: string } | { kind: 'archive' };
 
 const $ = <T extends Element>(selector: string, root: ParentNode = document) => root.querySelector<T>(selector)!;
 
@@ -26,6 +46,8 @@ const EVENT_LABELS: Record<string, string> = {
   login_blocked: 'Sign-in blocked (too many attempts)',
   logout: 'Signed out',
   click: 'Clicked',
+  tab_opened: 'Opened a tab',
+  folder_opened: 'Opened a folder',
   video_play: 'Played a preview',
   video_pause: 'Paused a preview',
   video_ended: 'Watched a preview to the end',
@@ -34,24 +56,45 @@ const EVENT_LABELS: Record<string, string> = {
   download_completed: 'Download completed',
   download_failed: 'Download failed',
   download_denied: 'Download refused',
+  zip_links_issued: 'Started a ZIP download',
+  zip_completed: 'ZIP download completed',
+  zip_failed: 'ZIP download failed',
   page_hidden: 'Left the tab',
   page_visible: 'Came back to the tab',
   page_created: 'Page created',
   page_updated: 'Page edited',
   password_reset: 'Password reset',
   sessions_ended: 'All browsers signed out',
+  folder_created: 'Folder created',
+  folder_renamed: 'Folder renamed',
+  folder_archived: 'Folder archived',
+  folder_restored: 'Folder restored',
+  folder_deleted: 'Folder deleted',
   file_added: 'File added, metadata removed',
   file_removed: 'File removed',
+  file_moved: 'File moved',
+  file_archived: 'File archived',
+  file_restored: 'File restored',
+  client_emailed: 'Client emailed about new files',
   metadata_leak: 'Metadata check failed, file rejected',
 };
-const BAD_EVENTS = new Set(['login_failed', 'login_blocked', 'download_failed', 'download_denied', 'preview_failed', 'metadata_leak']);
+const BAD_EVENTS = new Set(['login_failed', 'login_blocked', 'download_failed', 'download_denied', 'preview_failed', 'zip_failed', 'metadata_leak']);
 const FILTERS: Record<string, (e: EventRow) => boolean> = {
   all: () => true,
   client: (e) => e.actor === 'client',
   auth: (e) => ['password_created', 'login_success', 'login_failed', 'login_blocked', 'logout', 'password_reset', 'sessions_ended'].includes(e.event),
-  downloads: (e) => e.event.startsWith('download_'),
+  downloads: (e) => e.event.startsWith('download_') || e.event.startsWith('zip_'),
   admin: (e) => e.actor !== 'client',
 };
+const NOTIFY_STATES: Record<string, string> = {
+  ready: 'On',
+  waiting: 'Starts after the client creates a password and opens the page',
+  no_email: 'Off: no notification email (use Edit)',
+  off: 'Off for this client',
+  not_configured: 'Off: RESEND_API_KEY or NOTIFY_FROM_EMAIL missing in Vercel',
+};
+const SUPPORTED = /\.(mp4|m4v|mov|webm|jpe?g|png|webp)$/i;
+const SYSTEM_FILES = /^(\.|thumbs\.db$|desktop\.ini$)/i;
 
 const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
 const dateOnly = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
@@ -89,12 +132,22 @@ async function api<T = Record<string, unknown>>(action: string, data: Record<str
   return body as T;
 }
 
-const state: { clients: ClientRow[]; selected: string | null; files: FileRow[]; events: EventRow[]; client: ClientRow | null } = {
+const state: {
+  clients: ClientRow[];
+  selected: string | null;
+  client: ClientRow | null;
+  folders: FolderRow[];
+  files: FileRow[];
+  events: EventRow[];
+  view: View;
+} = {
   clients: [],
   selected: new URLSearchParams(location.search).get('client'),
+  client: null,
+  folders: [],
   files: [],
   events: [],
-  client: null,
+  view: { kind: 'root' },
 };
 
 // ---------- Client list ----------
@@ -134,6 +187,7 @@ searchEl.addEventListener('input', renderList);
 
 // ---------- Detail ----------
 async function select(id: string | null) {
+  if (id !== state.selected) state.view = { kind: 'root' };
   state.selected = id;
   const url = new URL(location.href);
   if (id) url.searchParams.set('client', id);
@@ -148,8 +202,11 @@ async function select(id: string | null) {
 async function loadDetail() {
   if (!state.selected) return;
   try {
-    const data = await api<{ client: ClientRow; files: FileRow[]; events: EventRow[] }>('get', { id: state.selected });
+    const data = await api<{ client: ClientRow; folders: FolderRow[]; files: FileRow[]; events: EventRow[] }>('get', { id: state.selected });
     Object.assign(state, data);
+    if (state.view.kind === 'folder' && !state.folders.some((f) => state.view.kind === 'folder' && f.id === state.view.id)) {
+      state.view = { kind: 'root' };
+    }
     renderDetail();
   } catch (e) {
     if ((e as Error).message === 'not_found') await select(null);
@@ -167,18 +224,90 @@ function renderDetail() {
   field('link').textContent = c.link;
   $<HTMLAnchorElement>('[data-open-link]').href = c.link;
   field('password').textContent = c.password_set_at ? `Set ${fmt(c.password_set_at, false)}` : 'Not set yet';
-  field('files').textContent = String(state.files.length);
+  field('files').textContent = `${state.files.length} in ${state.folders.length} ${state.folders.length === 1 ? 'folder' : 'folders'} and loose`;
   field('activity').textContent = fmt(c.last_client_activity);
   field('created').textContent = fmt(c.created_at, false);
+  const notifyText = NOTIFY_STATES[c.notify_state ?? 'off'] ?? '';
+  field('notify').textContent = c.notify_state === 'ready' ? `On, to ${c.notify_email}` : notifyText;
+  const notify = $<HTMLInputElement>('[data-notify]');
+  notify.disabled = c.notify_state !== 'ready';
+  notify.checked = c.notify_state === 'ready';
+  $('[data-notify-state]').textContent = c.notify_state === 'ready' ? `Sends one email to ${c.notify_email} per upload.` : notifyText;
   renderFiles();
   renderLog();
 }
 
+// ---------- Files, folders and archive ----------
+const activeFolders = () => state.folders.filter((f) => !f.archived_at);
+const folderById = (id: string | null) => state.folders.find((f) => f.id === id) ?? null;
+const filesIn = (folderId: string | null) => state.files.filter((f) => f.folder_id === folderId && !f.archived_at);
+
+function tab(label: string, pressed: boolean, onClick: () => void) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'tab';
+  b.textContent = label;
+  b.setAttribute('aria-pressed', String(pressed));
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+function setView(view: View) {
+  state.view = view;
+  renderFiles();
+}
+
 function renderFiles() {
+  const v = state.view;
+  const tabs = $('[data-tabs]');
+  const archivedCount = state.folders.filter((f) => f.archived_at).length + state.files.filter((f) => f.archived_at).length;
+  tabs.replaceChildren(
+    tab(`Loose files (${filesIn(null).length})`, v.kind === 'root', () => setView({ kind: 'root' })),
+    ...activeFolders().map((f) =>
+      tab(`${f.name} (${filesIn(f.id).length})`, v.kind === 'folder' && v.id === f.id, () => setView({ kind: 'folder', id: f.id })),
+    ),
+    tab(`Archive (${archivedCount})`, v.kind === 'archive', () => setView({ kind: 'archive' })),
+  );
+
+  const folder = v.kind === 'folder' ? folderById(v.id) : null;
+  $('[data-folder-bar]').toggleAttribute('hidden', !folder);
+  if (folder) {
+    $('[data-folder-name]').textContent = folder.archived_at ? `${folder.name} (archived)` : folder.name;
+    $('[data-folder-archive]').textContent = folder.archived_at ? 'Restore' : 'Archive';
+  }
+  $('[data-upload]').toggleAttribute('hidden', v.kind === 'archive' || Boolean(folder?.archived_at));
+  $('[data-archive-note]').toggleAttribute('hidden', v.kind !== 'archive');
+  $('[data-drop-target]').textContent = folder ? `Files go into “${folder.name}”. Dropped folders become new folders.` : 'Files go in loose. Dropped folders become new folders.';
+
+  // Folder cards: archived folders in the Archive view.
+  const folderGrid = $<HTMLUListElement>('[data-folder-grid]');
+  const folderTpl = $<HTMLTemplateElement>('#tpl-folder');
+  folderGrid.replaceChildren();
+  if (v.kind === 'archive') {
+    for (const f of state.folders.filter((f) => f.archived_at)) {
+      const li = folderTpl.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
+      $('.folder-card__name', li).textContent = f.name;
+      $('.folder-card__meta', li).textContent = `${state.files.filter((x) => x.folder_id === f.id).length} files, archived ${fmt(f.archived_at, false)}`;
+      $('button', li).addEventListener('click', () => setView({ kind: 'folder', id: f.id }));
+      folderGrid.append(li);
+    }
+  }
+
+  const shown =
+    v.kind === 'archive'
+      ? state.files.filter((f) => f.archived_at)
+      : v.kind === 'folder'
+        ? state.files.filter((f) => f.folder_id === v.id && (folder?.archived_at ? true : !f.archived_at))
+        : filesIn(null);
+  renderFileCards(shown);
+  $('[data-files-empty]').toggleAttribute('hidden', shown.length > 0 || folderGrid.children.length > 0);
+}
+
+function renderFileCards(files: FileRow[]) {
   const grid = $<HTMLUListElement>('[data-file-grid]');
   const tpl = $<HTMLTemplateElement>('#tpl-file');
   grid.replaceChildren();
-  for (const f of state.files) {
+  for (const f of files) {
     const li = tpl.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
     const preview = $('.file__preview', li);
     if (f.kind === 'video') {
@@ -187,26 +316,93 @@ function renderFiles() {
       video.controls = true;
       video.preload = 'metadata';
       video.playsInline = true;
+      if (f.width && f.height) {
+        video.width = f.width;
+        video.height = f.height;
+      }
       preview.append(video);
     } else {
       const img = document.createElement('img');
       img.src = f.previewUrl;
       img.alt = f.file_name;
       img.loading = 'lazy';
+      if (f.width && f.height) {
+        img.width = f.width;
+        img.height = f.height;
+      }
       preview.append(img);
     }
     $('.file__name', li).textContent = f.file_name;
-    $('.file__meta', li).textContent = `${size(f.size_bytes)}, added ${fmt(f.created_at, false)}`;
-    $('button', li).addEventListener('click', async () => {
+    const where = f.folder_id ? folderById(f.folder_id)?.name ?? 'folder' : 'loose';
+    $('.file__meta', li).textContent = `${size(f.size_bytes)}${f.width ? `, ${f.width}x${f.height}` : ''}, ${where}, added ${fmt(f.created_at, false)}`;
+
+    const move = $<HTMLSelectElement>('[data-move]', li);
+    const options: [string, string][] = [['', 'No folder'], ...state.folders.map((x): [string, string] => [x.id, x.archived_at ? `${x.name} (archived)` : x.name])];
+    for (const [value, label] of options) {
+      const o = document.createElement('option');
+      o.value = value;
+      o.textContent = value === (f.folder_id ?? '') ? `In: ${label}` : `Move to: ${label}`;
+      o.selected = value === (f.folder_id ?? '');
+      move.append(o);
+    }
+    move.addEventListener('change', async () => {
+      await api('move-file', { id: state.selected, fileId: f.id, folderId: move.value || null });
+      await refresh();
+    });
+
+    const archive = $<HTMLButtonElement>('[data-archive]', li);
+    archive.textContent = f.archived_at ? 'Restore' : 'Archive';
+    archive.addEventListener('click', async () => {
+      await api('archive-file', { id: state.selected, fileId: f.id, archived: !f.archived_at });
+      await refresh();
+    });
+
+    $('[data-remove]', li).addEventListener('click', async () => {
       if (!(await confirmAction('Remove this file?', `“${f.file_name}” will be deleted and the client will no longer see it.`))) return;
       await api('delete-file', { id: state.selected, fileId: f.id });
       await refresh();
     });
     grid.append(li);
   }
-  $('[data-files-empty]').toggleAttribute('hidden', state.files.length > 0);
 }
 
+$('[data-new-folder]').addEventListener('click', async () => {
+  const name = await promptText('New folder', 'Folder name', '');
+  if (!name) return;
+  const { folder } = await api<{ folder: FolderRow }>('create-folder', { id: state.selected, name });
+  state.view = { kind: 'folder', id: folder.id };
+  await refresh();
+});
+
+$('[data-folder-rename]').addEventListener('click', async () => {
+  const folder = state.view.kind === 'folder' ? folderById(state.view.id) : null;
+  if (!folder) return;
+  const name = await promptText('Rename folder', 'Folder name', folder.name);
+  if (!name || name === folder.name) return;
+  await api('rename-folder', { id: state.selected, folderId: folder.id, name });
+  await refresh();
+});
+
+$('[data-folder-archive]').addEventListener('click', async () => {
+  const folder = state.view.kind === 'folder' ? folderById(state.view.id) : null;
+  if (!folder) return;
+  await api('archive-folder', { id: state.selected, folderId: folder.id, archived: !folder.archived_at });
+  state.view = folder.archived_at ? { kind: 'folder', id: folder.id } : { kind: 'archive' };
+  await refresh();
+});
+
+$('[data-folder-delete]').addEventListener('click', async () => {
+  const folder = state.view.kind === 'folder' ? folderById(state.view.id) : null;
+  if (!folder) return;
+  const count = state.files.filter((f) => f.folder_id === folder.id).length;
+  const ok = await confirmAction('Delete this folder?', `“${folder.name}” and its ${count} ${count === 1 ? 'file' : 'files'} will be deleted for good.`, folder.name);
+  if (!ok) return;
+  await api('delete-folder', { id: state.selected, folderId: folder.id });
+  state.view = { kind: 'root' };
+  await refresh();
+});
+
+// ---------- Activity log ----------
 const filterEl = $<HTMLSelectElement>('[data-log-filter]');
 const visibleEvents = () => state.events.filter(FILTERS[filterEl.value] ?? FILTERS.all);
 
@@ -258,7 +454,7 @@ async function refresh() {
   await Promise.all([loadDetail(), loadList()]);
 }
 
-// ---------- Actions ----------
+// ---------- Page actions ----------
 $('[data-copy-link]').addEventListener('click', async (event) => {
   const button = event.currentTarget as HTMLButtonElement;
   try {
@@ -290,7 +486,7 @@ $('[data-delete]').addEventListener('click', async () => {
   const c = state.client!;
   const ok = await confirmAction(
     'Delete this page?',
-    'The link stops working and every file and log entry for this page is deleted for good. Download the activity CSV first if you need the record.',
+    'The link stops working and every folder, file and log entry for this page is deleted for good. Download the activity CSV first if you need the record.',
     c.name,
   );
   if (!ok) return;
@@ -310,9 +506,12 @@ function openClientDialog(edit: boolean) {
   $('[data-dialog-error]').toggleAttribute('hidden', true);
   $('[data-dialog-title]').textContent = edit ? 'Edit client page' : 'New client page';
   if (edit && state.client) {
-    (clientForm.elements.namedItem('name') as HTMLInputElement).value = state.client.name;
-    (clientForm.elements.namedItem('contactDetail') as HTMLInputElement).value = state.client.contact_detail;
-    const radio = clientForm.querySelector<HTMLInputElement>(`input[name="contactMethod"][value="${state.client.contact_method}"]`);
+    const c = state.client;
+    (clientForm.elements.namedItem('name') as HTMLInputElement).value = c.name;
+    (clientForm.elements.namedItem('contactDetail') as HTMLInputElement).value = c.contact_detail;
+    (clientForm.elements.namedItem('notifyEmail') as HTMLInputElement).value = c.notify_email ?? '';
+    (clientForm.elements.namedItem('notifyEnabled') as HTMLInputElement).checked = c.notify_enabled !== false;
+    const radio = clientForm.querySelector<HTMLInputElement>(`input[name="contactMethod"][value="${c.contact_method}"]`);
     if (radio) radio.checked = true;
   }
   clientDialog.showModal();
@@ -329,6 +528,8 @@ clientForm.addEventListener('submit', async (event) => {
     name: String(data.get('name') ?? ''),
     contactMethod: String(data.get('contactMethod') ?? 'email'),
     contactDetail: String(data.get('contactDetail') ?? ''),
+    notifyEmail: String(data.get('notifyEmail') ?? ''),
+    notifyEnabled: data.get('notifyEnabled') === 'on',
   };
   try {
     if (editing) {
@@ -348,41 +549,47 @@ clientForm.addEventListener('submit', async (event) => {
   }
 });
 
-// ---------- Confirm dialog ----------
+// ---------- Confirm and prompt dialog ----------
 const confirmDialog = $<HTMLDialogElement>('[data-confirm-dialog]');
-function confirmAction(title: string, text: string, typeToConfirm?: string) {
-  return new Promise<boolean>((resolve) => {
+function openConfirm(title: string, text: string, input?: { label: string; value: string; mustEqual?: string }) {
+  return new Promise<string | null>((resolve) => {
     $('[data-confirm-title]').textContent = title;
     $('[data-confirm-text]').textContent = text;
+    $('[data-confirm-text]').toggleAttribute('hidden', !text);
     const wrap = $('[data-confirm-type-wrap]');
-    const input = $<HTMLInputElement>('[data-confirm-type]');
+    const field = $<HTMLInputElement>('[data-confirm-type]');
     const ok = $<HTMLButtonElement>('[data-confirm-ok]');
-    input.value = '';
-    wrap.toggleAttribute('hidden', !typeToConfirm);
-    if (typeToConfirm) {
-      $('[data-confirm-type-label]').textContent = `Type “${typeToConfirm}” to confirm`;
-      ok.disabled = true;
-      input.oninput = () => (ok.disabled = input.value !== typeToConfirm);
-    } else {
-      ok.disabled = false;
-    }
-    const done = (value: boolean) => {
+    wrap.toggleAttribute('hidden', !input);
+    field.value = input?.value ?? '';
+    field.maxLength = 120;
+    if (input) $('[data-confirm-type-label]').textContent = input.label;
+    const validate = () => (ok.disabled = Boolean(input && (input.mustEqual ? field.value !== input.mustEqual : !field.value.trim())));
+    field.oninput = validate;
+    validate();
+    const done = (value: string | null) => {
       confirmDialog.close();
       resolve(value);
     };
     $<HTMLFormElement>('[data-confirm-form]').onsubmit = (e) => {
       e.preventDefault();
-      done(true);
+      done(input ? field.value.trim() : 'ok');
     };
-    $<HTMLButtonElement>('[data-confirm-cancel]').onclick = () => done(false);
-    confirmDialog.oncancel = () => resolve(false);
+    $<HTMLButtonElement>('[data-confirm-cancel]').onclick = () => done(null);
+    confirmDialog.oncancel = () => resolve(null);
     confirmDialog.showModal();
+    if (input) field.focus();
   });
 }
+const confirmAction = async (title: string, text: string, typeToConfirm?: string) =>
+  (await openConfirm(title, text, typeToConfirm ? { label: `Type “${typeToConfirm}” to confirm`, value: '', mustEqual: typeToConfirm } : undefined)) !== null;
+const promptText = (title: string, label: string, value: string) => openConfirm(title, '', { label, value });
 
-// ---------- Uploads ----------
+// ---------- Uploads (files and whole folders) ----------
+type Pending = { file: File; folderName: string | null };
+
 const drop = $<HTMLLabelElement>('[data-drop]');
 const fileInput = $<HTMLInputElement>('[data-file-input]');
+const folderInput = $<HTMLInputElement>('[data-folder-input]');
 const queueEl = $<HTMLUListElement>('[data-queue]');
 
 const putWithProgress = (url: string, file: File, contentType: string, onProgress: (p: number) => void) =>
@@ -396,21 +603,65 @@ const putWithProgress = (url: string, file: File, contentType: string, onProgres
     xhr.send(file);
   });
 
-async function uploadAll(files: FileList | File[]) {
+// Walks dropped folders (including subfolders). Everything inside one dropped folder lands in one folder.
+async function fromDrop(items: DataTransferItemList): Promise<Pending[]> {
+  const out: Pending[] = [];
+  const readDir = (dir: FileSystemDirectoryEntry) =>
+    new Promise<FileSystemEntry[]>((resolve, reject) => {
+      const reader = dir.createReader();
+      const all: FileSystemEntry[] = [];
+      const next = () =>
+        reader.readEntries((batch) => {
+          if (!batch.length) resolve(all);
+          else {
+            all.push(...batch);
+            next();
+          }
+        }, reject);
+      next();
+    });
+  const fileOf = (entry: FileSystemFileEntry) => new Promise<File>((resolve, reject) => entry.file(resolve, reject));
+  const walk = async (entry: FileSystemEntry, top: string | null): Promise<void> => {
+    if (entry.isFile) out.push({ file: await fileOf(entry as FileSystemFileEntry), folderName: top });
+    else for (const child of await readDir(entry as FileSystemDirectoryEntry)) await walk(child, top ?? entry.name);
+  };
+  const entries = Array.from(items)
+    .map((i) => i.webkitGetAsEntry?.())
+    .filter((e): e is FileSystemEntry => Boolean(e));
+  for (const entry of entries) await walk(entry, null);
+  return out;
+}
+
+async function uploadAll(pending: Pending[]) {
   const id = state.selected;
-  if (!id) return;
+  if (!id || !pending.length) return;
+  const targetFolder = state.view.kind === 'folder' ? state.view.id : null;
   const tpl = $<HTMLTemplateElement>('#tpl-queue');
-  const items = Array.from(files).map((file) => {
+
+  // One folder per dropped folder name (reuses an active folder with the same name).
+  const folderIds = new Map<string, string>();
+  for (const name of new Set(pending.map((p) => p.folderName).filter((n): n is string => Boolean(n)))) {
+    const { folder } = await api<{ folder: FolderRow }>('create-folder', { id, name, reuse: true });
+    folderIds.set(name, folder.id);
+  }
+
+  const jobs = pending.map(({ file, folderName }) => {
     const li = tpl.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
-    $('.queue__name', li).textContent = file.name;
+    $('.queue__name', li).textContent = folderName ? `${folderName} / ${file.name}` : file.name;
     $('.queue__status', li).textContent = 'Waiting';
     queueEl.append(li);
-    return { file, li };
+    return { file, folderId: folderName ? folderIds.get(folderName)! : targetFolder, li };
   });
-  // One at a time keeps the processing function within its limits.
-  for (const { file, li } of items) {
+
+  let succeeded = 0;
+  const touched = new Set<string>();
+  const runJob = async ({ file, folderId, li }: (typeof jobs)[number]) => {
     const status = $('.queue__status', li);
     const bar = $<HTMLElement>('.queue__bar span', li);
+    if (SYSTEM_FILES.test(file.name) || !SUPPORTED.test(file.name)) {
+      status.textContent = 'Skipped: not a supported file';
+      return;
+    }
     try {
       status.textContent = 'Uploading';
       const { url, key, contentType } = await api<{ url: string; key: string; contentType: string }>('upload-url', {
@@ -420,26 +671,66 @@ async function uploadAll(files: FileList | File[]) {
       });
       await putWithProgress(url, file, contentType, (p) => (bar.style.transform = `scaleX(${p})`));
       status.textContent = 'Removing metadata';
-      await api('process', { id, key, fileName: file.name });
-      status.textContent = 'Ready';
-      setTimeout(() => li.remove(), 4000);
+      const result = await api<{ converted_from?: string }>('process', { id, key, fileName: file.name, folderId });
+      status.textContent = result.converted_from ? `Ready, converted from ${result.converted_from} to H.264 so it plays everywhere` : 'Ready';
+      succeeded++;
+      if (folderId) touched.add(folderId);
     } catch (e) {
       const reason = (e as Error).message;
       status.textContent =
-        reason === 'too_large' ? 'Too large (200 MB max)' : reason === 'unsupported_type' ? 'File type not supported' : reason === 'metadata_leak' ? 'Rejected: metadata could not be fully removed' : `Failed: ${reason}`;
+        reason === 'too_large'
+          ? 'Too large (200 MB max)'
+          : reason === 'unsupported_type'
+            ? 'File type not supported'
+            : reason === 'metadata_leak'
+              ? 'Rejected: metadata could not be fully removed'
+              : `Failed: ${reason}`;
       status.classList.add('is-error');
+    }
+  };
+
+  // Two at a time: quicker for folders of creatives, still within the function limits.
+  const queue = [...jobs];
+  await Promise.all(
+    [0, 1].map(async () => {
+      while (queue.length) await runJob(queue.shift()!);
+    }),
+  );
+
+  const notify = $<HTMLInputElement>('[data-notify]');
+  if (succeeded > 0 && notify.checked && !notify.disabled) {
+    const li = tpl.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
+    $('.queue__name', li).textContent = 'Client email';
+    queueEl.append(li);
+    try {
+      const { sent, reason } = await api<{ sent: boolean; reason?: string }>('notify', { id, count: succeeded, folderIds: [...touched] });
+      $('.queue__status', li).textContent = sent ? `Sent to ${state.client?.notify_email}` : `Not sent: ${NOTIFY_STATES[reason ?? ''] ?? reason}`;
+    } catch (e) {
+      $('.queue__status', li).textContent = `Not sent: ${(e as Error).message}`;
+      $('.queue__status', li).classList.add('is-error');
     }
   }
   fileInput.value = '';
+  folderInput.value = '';
   await refresh();
 }
 
-fileInput.addEventListener('change', () => fileInput.files && uploadAll(fileInput.files));
+fileInput.addEventListener('change', () => fileInput.files && uploadAll(Array.from(fileInput.files).map((file) => ({ file, folderName: null }))));
+$('[data-pick-folder]').addEventListener('click', () => folderInput.click());
+folderInput.addEventListener('change', () => {
+  if (!folderInput.files) return;
+  uploadAll(
+    Array.from(folderInput.files).map((file) => ({
+      file,
+      folderName: (file as File & { webkitRelativePath?: string }).webkitRelativePath?.split('/')[0] || null,
+    })),
+  );
+});
 ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => (e.preventDefault(), drop.classList.add('is-over'))));
 ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, () => drop.classList.remove('is-over')));
-drop.addEventListener('drop', (e) => {
+drop.addEventListener('drop', async (e) => {
   e.preventDefault();
-  if (e.dataTransfer?.files.length) uploadAll(e.dataTransfer.files);
+  if (e.dataTransfer?.items.length) uploadAll(await fromDrop(e.dataTransfer.items));
 });
 
 // ---------- Start ----------

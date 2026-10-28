@@ -30,15 +30,23 @@ const deliverySteps = [
     text: 'Your browser stays signed in for about six months. Signing out ends it right away, and you can sign in on other devices with the same password.',
   },
   {
+    title: 'You browse folders',
+    text: 'Deliveries are grouped in folders, such as one per month or campaign. Older ones move to an Archive tab so the page stays tidy.',
+  },
+  {
     title: 'You preview and download',
-    text: 'Watch or view each file on the page, then download it. Your page shows whether each download finished.',
+    text: 'Watch or view each file, download one at a time, or download a whole folder as a single ZIP file. The page explains how to open it on any device.',
+  },
+  {
+    title: 'You hear when there’s more',
+    text: 'Once you’ve created your password and opened the page, you get a short email whenever new files are added.',
   },
 ];
 
 const protections = [
   {
     title: 'Metadata removed on upload',
-    text: 'Every file is cleaned before it reaches your page: device, software, location, and editing details, plus anything the generation tools embedded. Only the cleaned copy is stored, so it is the only copy anyone can download.',
+    text: 'Every file is cleaned before it reaches your page: device, software, location, and editing details, plus anything the generation tools embedded. Only the cleaned copy is stored, so it is the only copy anyone can download. Videos are delivered as H.264 MP4, which plays everywhere and is accepted by every major ad platform.',
   },
   {
     title: 'Links that expire',
@@ -54,7 +62,7 @@ const protections = [
   },
 ];
 
-const logged = ['Page visits', 'Password creation', 'Sign-ins and wrong passwords', 'Sign-outs', 'Button clicks', 'Previews played', 'Downloads, completed or failed'];
+const logged = ['Page visits', 'Password creation', 'Sign-ins and wrong passwords', 'Sign-outs', 'Button clicks and folders opened', 'Previews played', 'Downloads and ZIP downloads, completed or failed'];
 ---
 
 <BaseLayout

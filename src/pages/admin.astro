@@ -50,18 +50,48 @@ import AppLayout from '../layouts/AppLayout.astro';
           <div><dt>Files</dt><dd data-field="files"></dd></div>
           <div><dt>Last client activity</dt><dd data-field="activity"></dd></div>
           <div><dt>Created</dt><dd data-field="created"></dd></div>
+          <div><dt>Email updates</dt><dd data-field="notify"></dd></div>
         </dl>
 
         <section class="block" aria-labelledby="files-title">
-          <h3 id="files-title" class="block__title">Files</h3>
-          <label class="drop" data-drop>
-            <input type="file" multiple accept=".mp4,.m4v,.mov,.webm,.jpg,.jpeg,.png,.webp" data-file-input />
-            <span class="drop__main">Drop files here or click to choose</span>
-            <span class="drop__hint">MP4, MOV, WebM, JPG, PNG or WebP, up to 200 MB each. Metadata is removed before the client can see anything.</span>
-          </label>
+          <div class="block__head">
+            <h3 id="files-title" class="block__title">Files</h3>
+            <div class="block__tools">
+              <button class="btn btn--outline btn--small" type="button" data-new-folder>New folder</button>
+            </div>
+          </div>
+
+          <nav class="tabs" aria-label="Folders" data-tabs></nav>
+
+          <div class="folder-bar" data-folder-bar hidden>
+            <p class="folder-bar__name" data-folder-name></p>
+            <div class="folder-bar__actions">
+              <button class="btn btn--outline btn--small" type="button" data-folder-rename>Rename</button>
+              <button class="btn btn--outline btn--small" type="button" data-folder-archive>Archive</button>
+              <button class="btn btn--outline btn--small btn--danger" type="button" data-folder-delete>Delete folder</button>
+            </div>
+          </div>
+
+          <div class="upload" data-upload>
+            <label class="drop" data-drop>
+              <input type="file" multiple accept=".mp4,.m4v,.mov,.webm,.jpg,.jpeg,.png,.webp" data-file-input />
+              <span class="drop__main">Drop files or whole folders here, or click to choose files</span>
+              <span class="drop__hint" data-drop-target></span>
+              <span class="drop__hint">MP4, MOV, WebM, JPG, PNG or WebP, up to 200 MB each. Metadata is removed, and videos the browser can’t play (HEVC, ProRes, 10-bit, HDR) are converted to H.264.</span>
+            </label>
+            <div class="upload__options">
+              <button class="btn btn--outline btn--small" type="button" data-pick-folder>Upload a folder</button>
+              <input type="file" webkitdirectory multiple hidden data-folder-input />
+              <label class="check"><input type="checkbox" data-notify checked /> Email the client when this upload finishes</label>
+              <span class="small-print" data-notify-state></span>
+            </div>
+          </div>
+          <p class="small-print" data-archive-note hidden>Archived folders and files stay visible to the client under their Archive tab. Open a folder to restore it.</p>
+
           <ul class="queue" data-queue></ul>
+          <ul class="folder-grid" data-folder-grid></ul>
           <ul class="file-grid" data-file-grid></ul>
-          <p class="small-print" data-files-empty hidden>No files on this page yet.</p>
+          <p class="small-print" data-files-empty hidden>Nothing here yet.</p>
         </section>
 
         <section class="block" aria-labelledby="log-title">
@@ -111,6 +141,11 @@ import AppLayout from '../layouts/AppLayout.astro';
         <span class="field__label">Email address or Slack channel name</span>
         <input class="input" name="contactDetail" maxlength="200" />
       </label>
+      <label class="field">
+        <span class="field__label">Email for upload notifications</span>
+        <input class="input" name="notifyEmail" type="email" maxlength="254" placeholder="Same as above if they chose email" />
+      </label>
+      <label class="radio"><input type="checkbox" name="notifyEnabled" checked /> Email the client when new files are added</label>
       <p class="error" data-dialog-error hidden></p>
       <div class="dialog__actions">
         <button class="btn btn--outline btn--small" type="button" value="cancel" data-dialog-cancel>Cancel</button>
@@ -142,8 +177,15 @@ import AppLayout from '../layouts/AppLayout.astro';
       <div class="file__preview"></div>
       <p class="file__name"></p>
       <p class="file__meta"></p>
-      <button class="btn btn--outline btn--small" type="button">Remove</button>
+      <label class="file__move"><span class="visually-hidden">Move to folder</span><select class="input input--small" data-move></select></label>
+      <div class="file__actions">
+        <button class="btn btn--outline btn--small" type="button" data-archive>Archive</button>
+        <button class="btn btn--outline btn--small btn--danger" type="button" data-remove>Remove</button>
+      </div>
     </li>
+  </template>
+  <template id="tpl-folder">
+    <li><button class="folder-card" type="button"><span class="folder-card__icon" aria-hidden="true"></span><span class="folder-card__name"></span><span class="folder-card__meta"></span></button></li>
   </template>
   <template id="tpl-queue">
     <li class="queue__item"><span class="queue__name"></span><span class="queue__status"></span><span class="queue__bar"><span></span></span></li>
@@ -357,6 +399,114 @@ import AppLayout from '../layouts/AppLayout.astro';
     color: var(--ink-3);
   }
 
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .tabs :global(.tab) {
+    padding: 0.4rem 0.85rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: transparent;
+    font-size: var(--fs-xs);
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .tabs :global(.tab[aria-pressed='true']) {
+    background: var(--btn-bg);
+    border-color: var(--btn-bg);
+    color: var(--btn-ink);
+  }
+  .folder-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+  .folder-bar__name {
+    font-family: var(--font-display);
+    font-size: var(--fs-lg);
+  }
+  .folder-bar__actions,
+  .upload__options {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
+  }
+  .upload {
+    display: grid;
+    gap: var(--space-3);
+  }
+  .check {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--fs-sm);
+  }
+  .folder-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: var(--space-3);
+    list-style: none;
+  }
+  .folder-grid:empty {
+    display: none;
+  }
+  .folder-grid :global(.folder-card) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-3);
+    width: 100%;
+    padding: var(--space-4);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-s);
+    background: var(--bg-raised);
+    text-align: left;
+    cursor: pointer;
+  }
+  .folder-grid :global(.folder-card:hover) {
+    border-color: var(--ink);
+  }
+  .folder-grid :global(.folder-card__icon) {
+    grid-row: span 2;
+    width: 1.6rem;
+    height: 1.25rem;
+    margin-top: 0.2rem;
+    border: 1.5px solid var(--mark);
+    border-radius: 2px 2px 3px 3px;
+    position: relative;
+  }
+  .folder-grid :global(.folder-card__icon::before) {
+    content: '';
+    position: absolute;
+    left: -1.5px;
+    top: -0.4rem;
+    width: 0.7rem;
+    height: 0.35rem;
+    border: 1.5px solid var(--mark);
+    border-bottom: 0;
+    border-radius: 2px 2px 0 0;
+  }
+  .folder-grid :global(.folder-card__name) {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .folder-grid :global(.folder-card__meta) {
+    font-size: var(--fs-xs);
+    color: var(--ink-3);
+  }
+  .file-grid :global(.file__actions) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .file-grid :global(.file__move .input) {
+    width: 100%;
+  }
+
   .queue {
     display: grid;
     gap: var(--space-2);
@@ -420,9 +570,6 @@ import AppLayout from '../layouts/AppLayout.astro';
   .file-grid :global(.file__meta) {
     font-size: var(--fs-xs);
     color: var(--ink-3);
-  }
-  .file-grid :global(.file .btn) {
-    justify-self: start;
   }
 
   .table-wrap {

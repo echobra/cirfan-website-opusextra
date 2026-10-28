@@ -7,7 +7,7 @@
   "trailingSlash": false,
   "functions": {
     "api/admin.ts": {
-      "maxDuration": 120,
+      "maxDuration": 300,
       "includeFiles": "node_modules/ffmpeg-static/ffmpeg"
     },
     "api/portal.ts": {

@@ -1,12 +1,21 @@
 // src/config/site.ts
 // Business details used across the whole site. Edit here, not in the pages.
 
+// The contact email for the whole site, read at build time from the NEXT_PUBLIC_EMAIL environment variable
+// (Vercel > Project > Settings > Environment Variables, or .env when building locally). Change it there and
+// redeploy: every page, the footer, the structured data and the client pages pick it up.
+// The build stops with a clear message if it is missing, so no page ships with a blank address.
+const publicEmail: string = process.env.NEXT_PUBLIC_EMAIL || import.meta.env.NEXT_PUBLIC_EMAIL || '';
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(publicEmail)) {
+  throw new Error('NEXT_PUBLIC_EMAIL is missing or not an email address. Set it in Vercel (or .env locally), then rebuild.');
+}
+
 export const site = {
   name: 'cirfan',
   pronunciation: 'sir-fan',
   url: 'https://cirfan.com',
-  // Create this mailbox before launch (see README, "Before you launch").
-  email: 'hello@cirfan.com',
+  // Every email address on the site comes from NEXT_PUBLIC_EMAIL (see `publicEmail` below).
+  email: publicEmail,
   owner: 'Edward',
   ownerTitle: 'Founder and sole operator',
   tagline: 'AI image and video ad creatives, made to measure',

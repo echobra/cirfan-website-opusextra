@@ -31,6 +31,8 @@ Active clients receive files on a private page at cirfan.com. For each page, cir
 
 The activity log records visits, password creation, sign-ins and failed attempts, sign-outs, clicks, previews, and downloads, each with a timestamp, IP address, and browser details. It keeps deliveries secure and gives both sides a clear record of what was delivered and when.
 
+If an email address is set for update notices, cirfan sends one short email whenever new files are added to the page, but only after the page password has been created and the page opened. These emails are sent through Resend, a service based in the United States.
+
 This data is stored with Supabase (database) and Cloudflare R2 (files), and may be stored outside Quebec and Canada. It is kept for the duration of the project and as long as needed as a delivery record, and is deleted on request or when the page is deleted.
 
 ## Email

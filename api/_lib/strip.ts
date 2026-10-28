@@ -1,8 +1,16 @@
 // api/_lib/strip.ts
-// Removes metadata from delivered files and checks the result.
-// Video: remux with ffmpeg (no re-encode, no quality loss), dropping container, stream and chapter metadata.
+// Cleans delivered files and makes sure every video plays in every browser.
+//
+// Video:
+//  - Already browser-safe (H.264, 8-bit 4:2:0, standard dynamic range): remuxed with ffmpeg. No re-encode,
+//    no quality loss, metadata dropped.
+//  - Anything else (HEVC/H.265, ProRes, 10-bit, HDR, VP9/AV1, unusual pixel formats): converted to H.264 MP4
+//    at high quality (CRF 17). HDR is tone-mapped to standard range so it doesn't look grey and washed out.
+//    Many browsers can't show HEVC, ProRes or 10-bit video at all: you hear the audio over a grey box.
+//  - Output is always .mp4.
 // Images: re-encoded with sharp, which drops EXIF, XMP, IPTC and text chunks (where AI tools store prompts).
-//         The colour profile is kept so colours stay accurate. JPEG and WebP are saved at quality 95.
+//         The color profile is kept so colors stay accurate. JPEG and WebP are saved at quality 95.
+// After cleaning, the file is checked again; anything left over makes the upload fail.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import ffmpegPath from 'ffmpeg-static';
@@ -25,13 +33,77 @@ export const IMAGE_TYPES: Record<string, string> = {
 
 export const extensionOf = (name: string) => name.toLowerCase().split('.').pop() ?? '';
 
-// Container fields ffmpeg always reports. Anything else in the output counts as leftover metadata.
-const ALLOWED_VIDEO_KEYS = new Set(['major_brand', 'minor_version', 'compatible_brands', 'encoder']);
-
 const ffmpeg = () => {
   if (!ffmpegPath) throw new Error('ffmpeg binary not found');
   return ffmpegPath as unknown as string;
 };
+
+// ---------- Probing (ffmpeg -i output; ffprobe is not bundled to keep the function small) ----------
+
+/** Splits "a (b, c), d(e, f), g" on commas that are not inside parentheses. */
+const splitTop = (text: string) => {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of text) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) {
+      parts.push(current.trim());
+      current = '';
+    } else current += ch;
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+};
+
+export type VideoInfo = {
+  codec: string;
+  profile: string;
+  pixFmt: string;
+  hdr: boolean;
+  width: number;
+  height: number;
+  audio: string | null;
+};
+
+export const probeVideo = async (path: string): Promise<VideoInfo> => {
+  // ffmpeg exits with an error when given no output; the stream description is still on stderr.
+  const stderr = await run(ffmpeg(), ['-hide_banner', '-i', path], { maxBuffer: 1024 * 1024 }).then(
+    (r) => r.stderr,
+    (e: { stderr?: string }) => e.stderr ?? '',
+  );
+  const lines = stderr.split('\n');
+  const videoLine = lines.find((l) => /Stream #\d+:\d+.*: Video: /.test(l) && !l.includes('(attached pic)'));
+  if (!videoLine) throw new Error('no video stream found');
+  const audioLine = lines.find((l) => /Stream #\d+:\d+.*: Audio: /.test(l));
+
+  const parts = splitTop(videoLine.split(': Video: ')[1]);
+  const codec = parts[0].split(' ')[0];
+  const profile = parts[0].match(/^\S+ \(([^)]+)\)/)?.[1] ?? '';
+  const pixFmt = (parts[1] ?? '').split('(')[0].trim();
+  const colorInfo = (parts[1] ?? '').toLowerCase();
+  const size = parts.map((p) => p.match(/^(\d{2,5})x(\d{2,5})/)).find(Boolean);
+  return {
+    codec,
+    profile,
+    pixFmt,
+    hdr: /smpte2084|arib-std-b67|bt2020/.test(colorInfo),
+    width: size ? Number(size[1]) : 0,
+    height: size ? Number(size[2]) : 0,
+    audio: audioLine ? audioLine.split(': Audio: ')[1].split(' ')[0].replace(/,$/, '') : null,
+  };
+};
+
+export const isBrowserSafe = (v: VideoInfo) => v.codec === 'h264' && v.pixFmt === 'yuv420p' && !v.hdr;
+
+export const describeVideo = (v: VideoInfo) =>
+  [v.codec.toUpperCase(), v.profile, v.pixFmt, v.hdr ? 'HDR' : ''].filter(Boolean).join(' ');
+
+// ---------- Metadata check ----------
+
+// Container fields ffmpeg always reports. Anything else in the output counts as leftover metadata.
+const ALLOWED_VIDEO_KEYS = new Set(['major_brand', 'minor_version', 'compatible_brands', 'encoder']);
 
 export const leftoverVideoMetadata = async (path: string) => {
   const { stdout } = await run(ffmpeg(), ['-hide_banner', '-v', 'error', '-i', path, '-f', 'ffmetadata', '-'], {
@@ -44,22 +116,55 @@ export const leftoverVideoMetadata = async (path: string) => {
     .filter((key) => !ALLOWED_VIDEO_KEYS.has(key));
 };
 
-export const stripVideo = async (input: string, output: string, ext: string) => {
-  const args = [
-    '-hide_banner', '-loglevel', 'error', '-y',
-    '-i', input,
-    '-map', '0:v', '-map', '0:a?',
-    '-c', 'copy',
-    '-map_metadata', '-1',
-    '-map_metadata:s:v', '-1',
-    '-map_metadata:s:a', '-1',
-    '-map_chapters', '-1',
-    '-fflags', '+bitexact', '-flags:v', '+bitexact', '-flags:a', '+bitexact',
-  ];
-  if (ext !== 'webm') args.push('-movflags', '+faststart');
-  args.push(output);
-  await run(ffmpeg(), args, { timeout: 100_000, maxBuffer: 1024 * 1024 });
-  return leftoverVideoMetadata(output);
+const STRIP_ARGS = [
+  '-map_metadata', '-1',
+  '-map_metadata:s:v', '-1',
+  '-map_metadata:s:a', '-1',
+  '-map_chapters', '-1',
+  '-fflags', '+bitexact', '-flags:v', '+bitexact', '-flags:a', '+bitexact',
+  '-movflags', '+faststart',
+];
+
+// HDR (PQ or HLG) to standard range, Rec. 709, 8-bit 4:2:0.
+const TONEMAP =
+  'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p';
+
+export type VideoResult = { leftovers: string[]; converted: boolean; source: string; width: number; height: number };
+
+/** Writes a clean, browser-safe MP4 to `output` (which should end in .mp4). */
+export const stripVideo = async (input: string, output: string): Promise<VideoResult> => {
+  const info = await probeVideo(input);
+  const safe = isBrowserSafe(info);
+  const audioOk = !info.audio || info.audio === 'aac' || info.audio === 'mp3';
+  const args = ['-hide_banner', '-loglevel', 'error', '-y', '-i', input, '-map', '0:v:0', '-map', '0:a:0?'];
+
+  if (safe) {
+    args.push('-c:v', 'copy');
+  } else {
+    const pixels = info.width * info.height;
+    args.push(
+      '-c:v', 'libx264',
+      '-preset', pixels > 2_200_000 ? 'veryfast' : 'fast',
+      '-crf', '17',
+      '-profile:v', 'high',
+      '-vf', info.hdr ? TONEMAP : 'format=yuv420p',
+      '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
+    );
+  }
+  args.push(...(audioOk ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '192k']));
+  args.push(...STRIP_ARGS, output);
+
+  await run(ffmpeg(), args, { timeout: 280_000, maxBuffer: 4 * 1024 * 1024 });
+
+  const out = await probeVideo(output);
+  if (!isBrowserSafe(out)) throw new Error(`conversion produced ${describeVideo(out)}`);
+  return {
+    leftovers: await leftoverVideoMetadata(output),
+    converted: !safe,
+    source: describeVideo(info),
+    width: out.width,
+    height: out.height,
+  };
 };
 
 export const leftoverImageMetadata = async (path: string) => {
@@ -78,6 +183,6 @@ export const stripImage = async (input: string, output: string, ext: string) => 
   if (ext === 'png') pipeline = pipeline.png({ compressionLevel: 9 });
   else if (ext === 'webp') pipeline = pipeline.webp({ quality: 95 });
   else pipeline = pipeline.jpeg({ quality: 95, mozjpeg: true });
-  await pipeline.toFile(output);
-  return leftoverImageMetadata(output);
+  const info = await pipeline.toFile(output);
+  return { leftovers: await leftoverImageMetadata(output), width: info.width, height: info.height };
 };

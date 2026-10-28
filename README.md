@@ -12,14 +12,15 @@ Requires Node.js 22.12 or newer.
 npm install
 npm run dev        # pages only, http://localhost:4321
 npx vercel dev     # pages + api/ + middleware, http://localhost:3000 (run `npx vercel env pull .env.local` first)
-npm run build      # checks copy for em/en dashes, then builds to /dist
+npm run build      # checks copy for em/en dashes, then builds to /dist (needs NEXT_PUBLIC_EMAIL in .env or the environment)
 ```
 
 ## Where to edit things
 
 | What | File |
 | --- | --- |
-| Business name, email, social links, policy date, nav, main button text | `src/config/site.ts` |
+| Business name, social links, policy date, nav, main button text | `src/config/site.ts` |
+| Contact email (everywhere) | `NEXT_PUBLIC_EMAIL` environment variable |
 | Portfolio pieces (home shows the first 2 with `featured: true`) | `src/data/portfolio.ts` |
 | Questionnaire questions, answers, disqualifiers, flags | `src/data/questionnaire.js` |
 | Home page copy | `src/pages/index.astro` (arrays at the top) |
@@ -39,11 +40,13 @@ Set these in Vercel, Project Settings, Environment Variables, for Production and
 
 | Name | What it is |
 | --- | --- |
+| `NEXT_PUBLIC_EMAIL` | The site’s contact email, used on every page, in structured data, on client pages and as the reply-to of client emails. Read at build time: change it, then redeploy. The build stops if it’s missing |
 | `SLACK_FORM_WEBHOOK` | Slack Incoming Webhook URL for the questionnaire channel |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Dashboard login, matched exactly. Use a long password (20+ characters) |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | From Supabase, Project Settings, API. The service role key stays server-side |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | Cloudflare R2 bucket for delivered files |
 | `R2_JURISDICTION` | Optional, for example `eu`, only if the bucket was created in a jurisdiction |
+| `RESEND_API_KEY`, `NOTIFY_FROM_EMAIL` | Client email updates through Resend. `NOTIFY_FROM_EMAIL` like `cirfan <updates@cirfan.com>` on a domain verified in Resend |
 | `PORTAL_SESSION_DAYS` | Optional, defaults to 183 (about six months) |
 | `SITE_ORIGIN` | Optional, defaults to `https://cirfan.com` |
 
@@ -54,6 +57,13 @@ Create a Slack app with Incoming Webhooks, add a webhook for the channel that sh
 
 ### Supabase (database)
 Create a new Supabase project for cirfan (keep it separate from other businesses), open the SQL Editor, and run `supabase/schema.sql` once.
+Already ran an older `schema.sql`? Run `supabase/migrations/002_folders_archive_notify.sql` instead. It adds folders, the archive, file dimensions and email updates without touching existing data.
+
+### Resend (client email updates)
+Create a Resend account, add `cirfan.com` as a sending domain and add the DNS records it shows, then create an API key with Sending access only. Put it in `RESEND_API_KEY` and set `NOTIFY_FROM_EMAIL`. Emails go out once per upload batch, only to clients with a notification email who have created their password and opened their page.
+
+### Cloudflare in front of the site
+If cirfan.com is proxied through Cloudflare (orange cloud), the server reads the visitor’s real IP from `cf-connecting-ip`, but only for requests that really come from Cloudflare’s published IP ranges, so it can’t be faked. Vercel advises against putting a proxy in front of it, and Vercel Firewall rate limits then see Cloudflare’s addresses instead of visitors’, so the recommended setup is DNS only (grey cloud) for the records that point to Vercel. If Cloudflare publishes new ranges (https://www.cloudflare.com/ips), update the list in `api/_lib/http.ts`.
 
 ### Cloudflare R2 (files)
 1. Create a private bucket (no public access, no custom domain), for example `cirfan-deliveries`.
@@ -79,12 +89,18 @@ Add rate limit rules for `/api/fit`, `/api/portal` and `/admin` (for example 20 
 ## How the client pages work
 
 1. In `/admin`, click New page. A link like `https://cirfan.com/c/acme-skin-co-k3j9x2m8q4ab` is created at once.
-2. Upload files. Each one goes straight from your browser to R2, then the server removes its metadata (ffmpeg remux for video, no quality loss; sharp for images), checks nothing is left, stores only the clean copy and deletes the original. A file that still carries metadata after cleaning is rejected.
-3. Send the link through the client’s channel. The first person to open it creates the password, so send it only to the client. If anyone else got there first, use Reset password.
-4. The client stays signed in for about six months through an HttpOnly cookie. Downloads use signed links that expire after five minutes.
-5. Every visit, sign-in, wrong password, click, preview and download (completed or failed) is logged with time, IP and device. Read it per client in `/admin`, filter it, or export it as CSV.
+2. Upload files, or drop whole folders (or use Upload a folder). A dropped folder becomes a folder on the client page with the same name; subfolders are flattened into it. Each file goes straight from your browser to R2, then the server removes its metadata, checks nothing is left, stores only the clean copy and deletes the original.
+   - Videos already in H.264, 8-bit, standard range are remuxed with no quality loss.
+   - HEVC/H.265, ProRes, 10-bit, HDR, VP9 and AV1 are converted to H.264 MP4 at CRF 17, with HDR tone-mapped to standard range. Browsers can’t show many of these formats (you hear audio over a grey box), and HDR looks washed out on normal screens. The upload line and the activity log say when a file was converted.
+   - Images: EXIF, XMP, IPTC and text chunks removed with sharp, color profile kept.
+   - A file that still carries metadata after cleaning is rejected.
+3. Organize with New folder, Move to, Archive and Restore. Archived folders and files appear under the client’s Archive tab.
+4. Send the link through the client’s channel. The first person to open it creates the password, so send it only to the client. If anyone else got there first, use Reset password.
+5. The client stays signed in for about six months through an HttpOnly cookie. Downloads use signed links that expire after five minutes. Whole folders download as one ZIP built in the browser (written straight to disk on Chrome and Edge), with a short guide to opening ZIP files.
+6. After each upload batch, if Email the client is ticked and the client is eligible, one email is sent. Eligible means a notification email is set, updates are on, and the client has created their password and opened the page.
+7. Every visit, sign-in, wrong password, click, preview and download (completed or failed) is logged with time, IP and device. Read it per client in `/admin`, filter it, or export it as CSV.
 
-Limits: 200 MB per file (processing holds the original and the clean copy in the function’s 512 MB of temporary space). Eight wrong passwords in 15 minutes pause sign-in for that page for 15 minutes.
+Limits: 200 MB per file (processing holds the original and the clean copy in the function’s 512 MB of temporary space). Converting long 4K or HDR videos can take a few minutes; the function is allowed 300 seconds. Eight wrong passwords in 15 minutes pause sign-in for that page for 15 minutes.
 
 ## Deploy on Vercel (GitHub integration)
 

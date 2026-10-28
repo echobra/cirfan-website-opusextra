@@ -64,10 +64,55 @@ import { site } from '../config/site';
         logged with timestamps as a delivery record. See the <a href="/policies/privacy">privacy notice</a>.
       </p>
 
-      <ul class="deliveries" data-deliveries></ul>
-      <p class="lede" data-files-empty hidden>No files yet. You’ll hear from cirfan when they’re ready.</p>
+      <div class="tabs" role="group" aria-label="Show">
+        <button class="tab" type="button" data-tab="files" data-track="tab_files" aria-pressed="true">Files</button>
+        <button class="tab" type="button" data-tab="archive" data-track="tab_archive" aria-pressed="false">Archive</button>
+      </div>
+
+      <div class="folder-head" data-folder-head hidden>
+        <nav class="crumbs" aria-label="Breadcrumb">
+          <button class="link crumbs__back" type="button" data-back data-track="back_to_all"></button>
+          <span aria-hidden="true">/</span>
+          <span class="crumbs__current" data-folder-title></span>
+        </nav>
+        <div class="zip">
+          <p class="zip__count" data-folder-count></p>
+          <button class="btn btn--primary btn--small" type="button" data-zip data-track="download_all_zip">Download all as ZIP</button>
+          <p class="small-print zip__status" aria-live="polite" data-zip-status></p>
+        </div>
+        <details class="zip-help">
+          <summary data-track="zip_help">How to open a ZIP file</summary>
+          <p>A ZIP is one file that holds the whole folder. Once it has downloaded:</p>
+          <ul>
+            <li><strong>Windows:</strong> right-click the file, choose Extract All, then Extract.</li>
+            <li><strong>Mac:</strong> double-click the file. A folder with the same name appears next to it.</li>
+            <li><strong>iPhone or iPad:</strong> open the Files app, go to Downloads, and tap the file once.</li>
+            <li><strong>Android:</strong> open Files by Google, tap the file, then tap Extract.</li>
+          </ul>
+        </details>
+      </div>
+
+      <section data-section="folders" hidden>
+        <h2 class="section-label">Folders</h2>
+        <ul class="folders" data-folders></ul>
+      </section>
+      <section data-section="files" hidden>
+        <h2 class="section-label" data-files-label>Files</h2>
+        <ul class="deliveries" data-deliveries></ul>
+      </section>
+      <p class="lede" data-files-empty hidden></p>
     </div>
   </div>
+
+  <template id="tpl-folder">
+    <li>
+      <button class="folder" type="button">
+        <span class="folder__icon" aria-hidden="true"></span>
+        <span class="folder__name"></span>
+        <span class="folder__meta"></span>
+      </button>
+    </li>
+  </template>
 
   <template id="tpl-delivery">
     <li class="delivery">
@@ -152,11 +197,152 @@ import { site } from '../config/site';
     text-underline-offset: 0.2em;
   }
 
+  .tabs {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-7);
+  }
+  .tab {
+    padding: 0.5rem 1.1rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: transparent;
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .tab[aria-pressed='true'] {
+    background: var(--btn-bg);
+    border-color: var(--btn-bg);
+    color: var(--btn-ink);
+  }
+
+  .folder-head {
+    display: grid;
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+    padding-bottom: var(--space-5);
+    border-bottom: 1px solid var(--line);
+  }
+  .crumbs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-3);
+    font-size: var(--fs-sm);
+    color: var(--ink-3);
+  }
+  .crumbs__back {
+    border: 0;
+    background: none;
+    padding: 0 0 2px;
+    font-size: var(--fs-sm);
+    cursor: pointer;
+  }
+  .crumbs__current {
+    font-family: var(--font-display);
+    font-size: var(--fs-2xl);
+    line-height: 1.1;
+    color: var(--ink);
+  }
+  .zip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3) var(--space-5);
+  }
+  .zip__count {
+    color: var(--ink-2);
+  }
+  .zip-help {
+    max-width: 40rem;
+    font-size: var(--fs-sm);
+    color: var(--ink-2);
+  }
+  .zip-help summary {
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .zip-help p,
+  .zip-help ul {
+    margin-top: var(--space-3);
+  }
+  .zip-help ul {
+    display: grid;
+    gap: var(--space-2);
+    padding-left: 1.2em;
+  }
+  .zip-help li::marker {
+    color: var(--mark);
+  }
+
+  .section-label {
+    margin-top: var(--space-7);
+    font-family: var(--font-text);
+    font-size: var(--fs-sm);
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--ink-3);
+  }
+
+  .folders {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+    list-style: none;
+  }
+  .folders :global(.folder) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-4);
+    width: 100%;
+    padding: var(--space-5);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-m);
+    background: var(--bg-raised);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 0.2s var(--ease-out);
+  }
+  .folders :global(.folder:hover) {
+    border-color: var(--ink);
+  }
+  .folders :global(.folder__icon) {
+    position: relative;
+    grid-row: span 2;
+    width: 2rem;
+    height: 1.55rem;
+    margin-top: 0.35rem;
+    border: 1.5px solid var(--mark);
+    border-radius: 2px 2px 4px 4px;
+  }
+  .folders :global(.folder__icon::before) {
+    content: '';
+    position: absolute;
+    left: -1.5px;
+    top: -0.45rem;
+    width: 0.85rem;
+    height: 0.4rem;
+    border: 1.5px solid var(--mark);
+    border-bottom: 0;
+    border-radius: 2px 2px 0 0;
+  }
+  .folders :global(.folder__name) {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+  .folders :global(.folder__meta) {
+    font-size: var(--fs-sm);
+    color: var(--ink-3);
+  }
+
   .deliveries {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
     gap: var(--space-7) var(--space-6);
-    margin-top: var(--space-7);
+    margin-top: var(--space-4);
     list-style: none;
   }
   .deliveries :global(.delivery) {
@@ -167,6 +353,7 @@ import { site } from '../config/site';
   .deliveries :global(.delivery__media video),
   .deliveries :global(.delivery__media img) {
     width: 100%;
+    height: auto;
     max-height: 28rem;
     object-fit: contain;
     border-radius: var(--radius-m);

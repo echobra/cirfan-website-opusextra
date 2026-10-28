@@ -25,7 +25,13 @@ const TRACKABLE = new Set([
   'download_failed',
   'page_hidden',
   'page_visible',
+  'tab_opened',
+  'folder_opened',
+  'zip_completed',
+  'zip_failed',
 ]);
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 const cookieName = (id: string) => `cp_${id}`;
 
@@ -152,18 +158,50 @@ export async function POST(request: Request) {
 
       case 'files': {
         if (!(await hasSession(request, id))) return json({ error: 'signed_out' }, 401);
-        const { data: files, error } = await db()
-          .from('files')
-          .select('id, file_name, kind, content_type, size_bytes, created_at, storage_key')
-          .eq('client_id', id)
-          .order('created_at', { ascending: false });
-        if (error) throw error;
+        const [{ data: folders, error: folderError }, { data: files, error }] = await Promise.all([
+          db().from('folders').select('id, name, archived_at, created_at').eq('client_id', id).order('created_at', { ascending: false }),
+          db()
+            .from('files')
+            .select('id, folder_id, file_name, kind, content_type, size_bytes, width, height, archived_at, created_at, storage_key')
+            .eq('client_id', id)
+            .order('created_at', { ascending: false }),
+        ]);
+        if (error || folderError) throw error ?? folderError;
         return json({
           client: { name: client.name, contactMethod: client.contact_method, contactDetail: client.contact_detail },
+          folders: folders ?? [],
           files: await Promise.all(
             (files ?? []).map(async ({ storage_key, ...f }) => ({ ...f, previewUrl: await signedPreview(storage_key) })),
           ),
         });
+      }
+
+      case 'download-folder': {
+        if (!(await hasSession(request, id))) return json({ error: 'signed_out' }, 401);
+        const folderId = line(body.folderId, 40);
+        if (!UUID_PATTERN.test(folderId)) return json({ error: 'not_found' }, 404);
+        const { data: folder } = await db().from('folders').select('id, name').eq('id', folderId).eq('client_id', id).maybeSingle();
+        if (!folder) {
+          await logEvent(id, 'client', 'download_denied', { folder_id: folderId }, meta);
+          return json({ error: 'not_found' }, 404);
+        }
+        const { data: files } = await db()
+          .from('files')
+          .select('id, file_name, storage_key, size_bytes, created_at')
+          .eq('folder_id', folder.id)
+          .eq('client_id', id)
+          .order('created_at', { ascending: true });
+        const links = await Promise.all(
+          (files ?? []).map(async (f) => ({
+            id: f.id,
+            fileName: f.file_name,
+            size: f.size_bytes,
+            createdAt: f.created_at,
+            url: await signedDownload(f.storage_key, f.file_name, 900),
+          })),
+        );
+        await logEvent(id, 'client', 'zip_links_issued', { folder: folder.name, files: links.length }, meta);
+        return json({ folder: folder.name, files: links });
       }
 
       case 'download': {
