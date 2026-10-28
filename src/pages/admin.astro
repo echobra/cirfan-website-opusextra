@@ -13,7 +13,6 @@ import AppLayout from '../layouts/AppLayout.astro';
         <h1 class="side__title">Client pages</h1>
         <button class="btn btn--primary btn--small" type="button" data-new-client>New page</button>
       </div>
-      <button class="btn btn--outline btn--small side__bulk" type="button" data-bulk-open>Bulk upload for several clients</button>
       <label class="visually-hidden" for="client-search">Search client pages</label>
       <input class="input" id="client-search" type="search" placeholder="Search" autocomplete="off" data-search />
       <ul class="client-list" data-client-list></ul>
@@ -22,62 +21,6 @@ import AppLayout from '../layouts/AppLayout.astro';
     </aside>
 
     <section class="main" aria-live="polite">
-      <div class="bulk" data-bulk hidden>
-        <header class="bulk__head">
-          <div>
-            <h2 class="bulk__title">Bulk upload</h2>
-            <p class="lede">
-              Drop folders for several clients at once. Each top folder goes to the client page with the same name, and
-              each folder inside it becomes a folder on that page.
-            </p>
-          </div>
-          <button class="btn btn--outline btn--small" type="button" data-bulk-close>Close</button>
-        </header>
-
-        <label class="drop" data-bulk-drop>
-          <span class="drop__main">Drop client folders here</span>
-          <span class="drop__hint">Or drop the folder that holds them. Nothing is sent until you review the plan.</span>
-          <pre class="bulk__tree" aria-label="Example folder layout">cirfan-client-work/
-  acme corp/          goes to the page “Acme Corp”
-    oct01-31/         becomes a folder on that page
-      cinematic-v1.mp4
-  mediacrater/
-    oct01-31/
-      video1.mp4</pre>
-        </label>
-        <div class="upload__options">
-          <button class="btn btn--outline btn--small" type="button" data-bulk-pick>Choose a folder</button>
-          <input type="file" webkitdirectory multiple hidden data-bulk-input />
-        </div>
-
-        <div class="bulk__plan" data-bulk-plan hidden>
-          <h3 class="block__title">Review before uploading</h3>
-          <p class="small-print" data-bulk-note></p>
-          <div class="table-wrap">
-            <table class="log plan">
-              <thead><tr><th scope="col">Folder</th><th scope="col">Client page</th><th scope="col">What will be uploaded</th></tr></thead>
-              <tbody data-bulk-rows></tbody>
-            </table>
-          </div>
-          <label class="check"><input type="checkbox" data-bulk-skip-existing checked /> Skip files already on the page (safe to re-run after a failure)</label>
-          <label class="check"><input type="checkbox" data-bulk-email checked /> Email each client when their files are ready</label>
-          <p class="small-print">
-            Emails only go to clients with email updates on who have created their password and opened their page.
-            Keep this tab open until it finishes: files upload from this computer.
-          </p>
-          <p class="bulk__summary" data-bulk-summary></p>
-          <div class="upload__options">
-            <button class="btn btn--primary btn--small" type="button" data-bulk-start>Start upload</button>
-            <button class="btn btn--outline btn--small" type="button" data-bulk-cancel>Clear</button>
-          </div>
-        </div>
-
-        <div class="bulk__run" data-bulk-run hidden>
-          <h3 class="block__title">Uploading</h3>
-          <ul class="bulk__progress" data-bulk-progress></ul>
-        </div>
-      </div>
-
       <div class="empty" data-detail-empty>
         <p class="lede">Pick a client page, or create one. Each page gets its own private link and acts as that client’s folder.</p>
       </div>
@@ -279,87 +222,6 @@ import AppLayout from '../layouts/AppLayout.astro';
   }
   .side__head .btn {
     white-space: nowrap;
-  }
-  .side__bulk {
-    width: 100%;
-  }
-
-  .bulk {
-    display: grid;
-    gap: var(--space-5);
-  }
-  .bulk__head {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--space-4);
-  }
-  .bulk__title {
-    font-size: var(--fs-2xl);
-  }
-  .bulk__head .lede {
-    margin-top: var(--space-3);
-    max-width: 44rem;
-  }
-  .bulk__tree {
-    margin: var(--space-3) auto 0;
-    padding: var(--space-4);
-    border-radius: var(--radius-s);
-    background: var(--bg-sunk);
-    color: var(--ink-2);
-    font-size: var(--fs-xs);
-    line-height: 1.6;
-    text-align: left;
-    overflow-x: auto;
-  }
-  .bulk__plan,
-  .bulk__run {
-    display: grid;
-    gap: var(--space-4);
-  }
-  .bulk__summary {
-    font-weight: 500;
-  }
-  .plan :global(select) {
-    max-width: 18rem;
-  }
-  .plan :global(tr.is-skipped td) {
-    color: var(--ink-3);
-  }
-  .bulk__progress {
-    display: grid;
-    gap: var(--space-4);
-    list-style: none;
-  }
-  .bulk__progress :global(.bulk-client) {
-    display: grid;
-    gap: var(--space-2);
-    padding: var(--space-4);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-s);
-    background: var(--bg-raised);
-  }
-  .bulk__progress :global(.bulk-client--done) {
-    border-color: var(--mark);
-    font-weight: 500;
-  }
-  .bulk__progress :global(.bulk-client__head) {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    gap: var(--space-2) var(--space-4);
-  }
-  .bulk__progress :global(.bulk-client__head span) {
-    color: var(--ink-2);
-    overflow-wrap: anywhere;
-  }
-  .bulk__progress :global(.bulk-client__head span.is-error) {
-    color: var(--mark);
-  }
-  .bulk__progress :global(summary) {
-    font-size: var(--fs-sm);
-    cursor: pointer;
   }
 
   .input {

@@ -47,7 +47,6 @@ Set these in Vercel, Project Settings, Environment Variables, for Production and
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | Cloudflare R2 bucket for delivered files |
 | `R2_JURISDICTION` | Optional, for example `eu`, only if the bucket was created in a jurisdiction |
 | `RESEND_API_KEY`, `NOTIFY_FROM_EMAIL` | Client email updates through Resend. `NOTIFY_FROM_EMAIL` like `cirfan <updates@cirfan.com>` on a domain verified in Resend |
-| `SLACK_ADMIN_WEBHOOK` | Optional. Slack webhook for a short summary when a bulk upload finishes (use a private channel) |
 | `PORTAL_SESSION_DAYS` | Optional, defaults to 183 (about six months) |
 | `SITE_ORIGIN` | Optional, defaults to `https://cirfan.com` |
 
@@ -106,27 +105,6 @@ Add rate limit rules for `/api/fit`, `/api/portal` and `/admin` (for example 20 
 7. Every visit, sign-in, wrong password, click, preview and download (completed or failed) is logged with time, IP and device. Read it per client in `/admin`, filter it, or export it as CSV.
 
 Limits: 200 MB per file, checked before upload (processing holds the original and the clean copy in the function’s 512 MB of temporary space). Uploads run two at a time, but files are processed one at a time so two conversions never share a server’s memory. A 10 second 4K 60 fps HDR phone clip takes roughly a minute to convert; ffmpeg is stopped after 230 seconds and the file is reported as too long. Every failure is shown on its upload line and logged as "File could not be processed" with the reason. Eight wrong passwords in 15 minutes pause sign-in for that page for 15 minutes.
-
-## Bulk upload for several clients
-
-In `/admin`, click Bulk upload for several clients, then drop your client folders (or the one folder that holds them) or use Choose a folder.
-
-```
-cirfan-client-work/        dropped as a whole: treated as the container
-  acme corp/               goes to the page named “Acme Corp” (case, spaces, dashes and accents ignored)
-    oct01-31/              becomes the folder “oct01-31” on that page (added to it if it already exists)
-      cinematic-v1.mp4
-    hero.png               a file directly in a client folder goes in loose
-  mediacrater/
-    oct01-31/
-      video1.mp4
-```
-
-- Nothing is uploaded until you review the plan. Each top folder shows the page it matched. Folders with no match, or more than one, are skipped until you pick a page or choose Create a new page.
-- Files already on that page in the same folder are skipped by default, so re-running the same drop after a failure only uploads what is missing.
-- Unsupported files, system files (such as .DS_Store) and files over 200 MB are skipped and listed. Folders deeper than one level are merged into their parent folder.
-- Clients are processed one after another. As soon as one client’s files are ready, that client gets one email (if they are eligible), then the next client starts. New pages created by a bulk upload are never emailed: send their link yourself, shown in the results.
-- Keep the tab open until it says All done: files upload from your computer. The tab title shows progress, closing it asks for confirmation, and the screen is kept awake where the browser supports it. If `SLACK_ADMIN_WEBHOOK` is set, a summary is posted to Slack at the end.
 
 ## Deploy on Vercel (GitHub integration)
 
