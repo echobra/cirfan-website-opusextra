@@ -167,6 +167,29 @@ export const portfolio: PortfolioItem[] = [
     published: '2026-10-26',
     featured: false,
   },
+  {
+    slug: 'corsair',
+    title: 'Corsair',
+    style: 'Cinematic',
+    summary: 'An animated 9:16 RAM advertisement.',
+    media: {
+      kind: 'video',
+      src: '/portfolio/corsair-ad-demo-v1.mp4',
+      poster: '/portfolio/corsair-ad-demo-v1.webp',
+      width: 1280,
+      height: 720,
+      seconds: 9,
+      hookSeconds: 2,
+    },
+    bullets: [
+      'Displaying RAM sticks for visual hook to immediately show the product advertised.',
+      'Stated benefits of DDR5 RAM in audio (extreme speed, vibrant RGB controls).',
+      'Closes on the logo, so the brand is the last thing on screen.',
+    ],
+    note: 'Corsair and their logos are trademarks of Corsaier or its affiliates. Spec ad shown as a visual reference only.',
+    published: '2026-10-28',
+    featured: false,
+  },
 ];
 
 export const featured = portfolio.filter((item) => item.featured).slice(0, 2);
