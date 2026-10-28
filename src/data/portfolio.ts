@@ -190,23 +190,30 @@ export const portfolio: PortfolioItem[] = [
     published: '2026-10-26',
     featured: false,
   },
-  {
-    slug: 'microsoft',
-    title: 'Microsoft',
-    style: 'Cinematic',
-    summary: 'A formal, cinematic 9:16 commercial for Microsoft.',
-    media: {
-      kind: 'video',
-      src: '/portfolio/microsoft-ad-demo-v1.mp4',
-      poster: '/portfolio/microsoft-ad-demo-v1.webp',
-      width: 608,
-      height: 1080,
-      seconds: 10,
-      hookSeconds: 1,
-    },
-    published: '2026-10-28',
-    featured: false,
+{
+  slug: 'microsoft',
+  title: 'Microsoft',
+  style: 'Cinematic',
+  summary: 'A formal, cinematic 9:16 commercial for Microsoft.',
+  media: {
+    kind: 'video',
+    src: '/portfolio/microsoft-ad-demo-v1.mp4',
+    poster: '/portfolio/microsoft-ad-demo-v1.webp',
+    width: 608,
+    height: 1080,
+    seconds: 10,
+    hookSeconds: 1,
   },
+  bullets: [
+    'Opens on hands at a Surface keyboard, putting the product in frame from the first second.',
+    'Moves through creation moments: coding, data, and drawing with the Surface Pen.',
+    'Glowing particle trails and clean lighting keep the tone premium and modern.',
+    'Closes on the Microsoft logo so the brand is the final image.',
+  ],
+  note: 'Microsoft and the Microsoft logo are trademarks of Microsoft Corporation. Spec ad shown as a visual reference only. cirfan is not affiliated with Microsoft.',
+  published: '2026-10-28',
+  featured: false,
+},
 ];
 
 export const featured = portfolio.filter((item) => item.featured).slice(0, 2);
