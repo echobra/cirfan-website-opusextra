@@ -65,6 +65,10 @@ Create a Resend account, add `cirfan.com` as a sending domain and add the DNS re
 ### Cloudflare in front of the site
 If cirfan.com is proxied through Cloudflare (orange cloud), the server reads the visitor’s real IP from `cf-connecting-ip`, but only for requests that really come from Cloudflare’s published IP ranges, so it can’t be faked. Vercel advises against putting a proxy in front of it, and Vercel Firewall rate limits then see Cloudflare’s addresses instead of visitors’, so the recommended setup is DNS only (grey cloud) for the records that point to Vercel. If Cloudflare publishes new ranges (https://www.cloudflare.com/ips), update the list in `api/_lib/http.ts`.
 
+While the proxy is on, two more things happen:
+- Cloudflare gives up on any request after 100 seconds and shows error 524. Long video conversions hit this; the server keeps working and the file usually appears a minute later, but the dashboard can’t tell you if it succeeded. DNS only removes the limit.
+- Cloudflare Web Analytics may inject `static.cloudflareinsights.com/beacon.min.js`. The Content-Security-Policy blocks it (you’ll see a console error), which is correct: the privacy notice says the site uses no analytics. Turn it off in Cloudflare (Analytics & Logs, Web Analytics) rather than allowing it, or update the privacy notice first.
+
 ### Cloudflare R2 (files)
 1. Create a private bucket (no public access, no custom domain), for example `cirfan-deliveries`.
 2. Create an R2 API token with Object Read & Write on that bucket only.
@@ -91,7 +95,7 @@ Add rate limit rules for `/api/fit`, `/api/portal` and `/admin` (for example 20 
 1. In `/admin`, click New page. A link like `https://cirfan.com/c/acme-skin-co-k3j9x2m8q4ab` is created at once.
 2. Upload files, or drop whole folders (or use Upload a folder). A dropped folder becomes a folder on the client page with the same name; subfolders are flattened into it. Each file goes straight from your browser to R2, then the server removes its metadata, checks nothing is left, stores only the clean copy and deletes the original.
    - Videos already in H.264, 8-bit, standard range are remuxed with no quality loss.
-   - HEVC/H.265, ProRes, 10-bit, HDR, VP9 and AV1 are converted to H.264 MP4 at CRF 17, with HDR tone-mapped to standard range. Browsers can’t show many of these formats (you hear audio over a grey box), and HDR looks washed out on normal screens. The upload line and the activity log say when a file was converted.
+   - HEVC/H.265, ProRes, 10-bit, HDR, VP9 and AV1 (phone footage usually is one of these) are converted to H.264 MP4 at CRF 16, capped at 1080 px on the short side, with HDR tone-mapped to standard range. Browsers can’t show many of these formats (you hear audio over a grey box), and HDR looks washed out on normal screens. The upload line and the activity log say when a file was converted.
    - Images: EXIF, XMP, IPTC and text chunks removed with sharp, color profile kept.
    - A file that still carries metadata after cleaning is rejected.
 3. Organize with New folder, Move to, Archive and Restore. Archived folders and files appear under the client’s Archive tab.
@@ -100,7 +104,7 @@ Add rate limit rules for `/api/fit`, `/api/portal` and `/admin` (for example 20 
 6. After each upload batch, if Email the client is ticked and the client is eligible, one email is sent. Eligible means a notification email is set, updates are on, and the client has created their password and opened the page.
 7. Every visit, sign-in, wrong password, click, preview and download (completed or failed) is logged with time, IP and device. Read it per client in `/admin`, filter it, or export it as CSV.
 
-Limits: 200 MB per file (processing holds the original and the clean copy in the function’s 512 MB of temporary space). Converting long 4K or HDR videos can take a few minutes; the function is allowed 300 seconds. Eight wrong passwords in 15 minutes pause sign-in for that page for 15 minutes.
+Limits: 200 MB per file, checked before upload (processing holds the original and the clean copy in the function’s 512 MB of temporary space). Uploads run two at a time, but files are processed one at a time so two conversions never share a server’s memory. A 10 second 4K 60 fps HDR phone clip takes roughly a minute to convert; ffmpeg is stopped after 230 seconds and the file is reported as too long. Every failure is shown on its upload line and logged as "File could not be processed" with the reason. Eight wrong passwords in 15 minutes pause sign-in for that page for 15 minutes.
 
 ## Deploy on Vercel (GitHub integration)
 

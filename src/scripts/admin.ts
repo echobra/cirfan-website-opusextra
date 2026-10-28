@@ -77,8 +77,9 @@ const EVENT_LABELS: Record<string, string> = {
   file_restored: 'File restored',
   client_emailed: 'Client emailed about new files',
   metadata_leak: 'Metadata check failed, file rejected',
+  processing_failed: 'File could not be processed',
 };
-const BAD_EVENTS = new Set(['login_failed', 'login_blocked', 'download_failed', 'download_denied', 'preview_failed', 'zip_failed', 'metadata_leak']);
+const BAD_EVENTS = new Set(['login_failed', 'login_blocked', 'download_failed', 'download_denied', 'preview_failed', 'zip_failed', 'metadata_leak', 'processing_failed']);
 const FILTERS: Record<string, (e: EventRow) => boolean> = {
   all: () => true,
   client: (e) => e.actor === 'client',
@@ -128,9 +129,38 @@ async function api<T = Record<string, unknown>>(action: string, data: Record<str
     body: JSON.stringify({ action, ...data }),
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+  if (!res.ok) {
+    // Our API always answers with JSON. No JSON means the platform answered instead: a crash, a timeout,
+    // or Cloudflare giving up on a slow request.
+    const platform: Record<number, string> = { 500: 'server_crashed', 502: 'server_crashed', 504: 'timed_out', 524: 'cloudflare_timeout' };
+    const error = new Error(body.error ?? platform[res.status] ?? `HTTP ${res.status}`) as Error & { reason?: string };
+    error.reason = body.reason;
+    throw error;
+  }
   return body as T;
 }
+
+const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
+const UPLOAD_ERRORS: Record<string, string> = {
+  too_large: 'Too large (200 MB max)',
+  unsupported_type: 'File type not supported',
+  metadata_leak: 'Rejected: metadata could not be fully removed',
+  conversion_timeout: 'Conversion took too long. Export a shorter clip, or H.264 1080p so no conversion is needed',
+  conversion_failed: 'Could not convert this video',
+  unreadable: 'Not a readable video file',
+  server_crashed: 'The server crashed while processing (usually out of memory). Try again on its own; if it repeats, export H.264 1080p',
+  timed_out: 'Took longer than 5 minutes. Export a shorter clip, or H.264 1080p',
+  cloudflare_timeout:
+    'Cloudflare stopped waiting after 100 seconds (orange cloud proxy). The server may still finish: it will appear below if it does',
+};
+
+// Only one file is processed at a time. Two 4K conversions at once can run out of memory on one server.
+let processing: Promise<unknown> = Promise.resolve();
+const oneAtATime = <T>(task: () => Promise<T>): Promise<T> => {
+  const next = processing.then(task, task);
+  processing = next.catch(() => {});
+  return next;
+};
 
 const state: {
   clients: ClientRow[];
@@ -645,23 +675,31 @@ async function uploadAll(pending: Pending[]) {
     folderIds.set(name, folder.id);
   }
 
-  const jobs = pending.map(({ file, folderName }) => {
+  // Unsupported and oversized files are marked straight away and never wait in the queue.
+  const jobs: { file: File; folderId: string | null; li: HTMLLIElement }[] = [];
+  for (const { file, folderName } of pending) {
     const li = tpl.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
+    const status = $('.queue__status', li);
     $('.queue__name', li).textContent = folderName ? `${folderName} / ${file.name}` : file.name;
-    $('.queue__status', li).textContent = 'Waiting';
     queueEl.append(li);
-    return { file, folderId: folderName ? folderIds.get(folderName)! : targetFolder, li };
-  });
+    if (SYSTEM_FILES.test(file.name) || !SUPPORTED.test(file.name)) {
+      status.textContent = 'Skipped: not a supported file';
+    } else if (file.size > MAX_UPLOAD_BYTES) {
+      status.textContent = `Skipped: ${size(file.size)} is over the 200 MB limit`;
+      status.classList.add('is-error');
+    } else {
+      status.textContent = 'Waiting';
+      jobs.push({ file, folderId: folderName ? folderIds.get(folderName)! : targetFolder, li });
+    }
+  }
 
   let succeeded = 0;
+  let cutOffByCloudflare = false;
   const touched = new Set<string>();
   const runJob = async ({ file, folderId, li }: (typeof jobs)[number]) => {
     const status = $('.queue__status', li);
     const bar = $<HTMLElement>('.queue__bar span', li);
-    if (SYSTEM_FILES.test(file.name) || !SUPPORTED.test(file.name)) {
-      status.textContent = 'Skipped: not a supported file';
-      return;
-    }
+    let timer = 0;
     try {
       status.textContent = 'Uploading';
       const { url, key, contentType } = await api<{ url: string; key: string; contentType: string }>('upload-url', {
@@ -670,22 +708,28 @@ async function uploadAll(pending: Pending[]) {
         size: file.size,
       });
       await putWithProgress(url, file, contentType, (p) => (bar.style.transform = `scaleX(${p})`));
-      status.textContent = 'Removing metadata';
-      const result = await api<{ converted_from?: string }>('process', { id, key, fileName: file.name, folderId });
+      status.textContent = 'Uploaded, waiting for its turn to process';
+      const result = await oneAtATime(() => {
+        const started = Date.now();
+        const tick = () => {
+          const s = Math.floor((Date.now() - started) / 1000);
+          status.textContent = `Removing metadata, converting if needed (${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')})`;
+        };
+        tick();
+        timer = window.setInterval(tick, 1000);
+        return api<{ converted_from?: string }>('process', { id, key, fileName: file.name, folderId });
+      });
       status.textContent = result.converted_from ? `Ready, converted from ${result.converted_from} to H.264 so it plays everywhere` : 'Ready';
       succeeded++;
       if (folderId) touched.add(folderId);
     } catch (e) {
-      const reason = (e as Error).message;
-      status.textContent =
-        reason === 'too_large'
-          ? 'Too large (200 MB max)'
-          : reason === 'unsupported_type'
-            ? 'File type not supported'
-            : reason === 'metadata_leak'
-              ? 'Rejected: metadata could not be fully removed'
-              : `Failed: ${reason}`;
+      const err = e as Error & { reason?: string };
+      if (err.message === 'cloudflare_timeout') cutOffByCloudflare = true;
+      const known = UPLOAD_ERRORS[err.message];
+      status.textContent = known ? `${known}${err.reason ? ` (${err.reason})` : ''}` : `Failed: ${err.message}`;
       status.classList.add('is-error');
+    } finally {
+      window.clearInterval(timer);
     }
   };
 
@@ -713,6 +757,8 @@ async function uploadAll(pending: Pending[]) {
   fileInput.value = '';
   folderInput.value = '';
   await refresh();
+  // Requests Cloudflare cut off keep running on the server; look again for files that finished late.
+  if (cutOffByCloudflare) [60_000, 180_000, 300_000].forEach((ms) => setTimeout(() => refresh(), ms));
 }
 
 fileInput.addEventListener('change', () => fileInput.files && uploadAll(Array.from(fileInput.files).map((file) => ({ file, folderName: null }))));

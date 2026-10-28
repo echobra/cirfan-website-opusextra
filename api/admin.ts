@@ -21,7 +21,7 @@ import {
   removePrefix,
   safeFileName,
 } from './_lib/storage.js';
-import { VIDEO_TYPES, IMAGE_TYPES, extensionOf, stripVideo, stripImage } from './_lib/strip.js';
+import { VIDEO_TYPES, IMAGE_TYPES, extensionOf, stripVideo, stripImage, ProcessingError } from './_lib/strip.js';
 import { EMAIL_PATTERN, notifyConfigured, sendUploadEmail } from './_lib/notify.js';
 
 // /tmp holds the original and the cleaned copy at once, and Vercel gives functions 512 MB of /tmp.
@@ -337,6 +337,12 @@ export async function POST(request: Request) {
           return json({ file: data, ...detail });
         } catch (error) {
           await removeObject(key).catch(() => {});
+          // Known conversion problems get a clear answer in the dashboard and a line in the activity log.
+          if (error instanceof ProcessingError) {
+            await logEvent(id, 'system', 'processing_failed', { file: fileName, problem: error.code, reason: error.reason }, meta);
+            return json({ error: error.code, reason: error.reason }, 422);
+          }
+          await logEvent(id, 'system', 'processing_failed', { file: fileName, reason: (error as Error).message.slice(0, 200) }, meta);
           throw error;
         } finally {
           await rm(dir, { recursive: true, force: true });

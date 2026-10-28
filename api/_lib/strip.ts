@@ -5,8 +5,11 @@
 //  - Already browser-safe (H.264, 8-bit 4:2:0, standard dynamic range): remuxed with ffmpeg. No re-encode,
 //    no quality loss, metadata dropped.
 //  - Anything else (HEVC/H.265, ProRes, 10-bit, HDR, VP9/AV1, unusual pixel formats): converted to H.264 MP4
-//    at high quality (CRF 17). HDR is tone-mapped to standard range so it doesn't look grey and washed out.
+//    at high quality (CRF 16). HDR is tone-mapped to standard range so it doesn't look grey and washed out.
 //    Many browsers can't show HEVC, ProRes or 10-bit video at all: you hear the audio over a grey box.
+//    Converted videos are capped at 1080 pixels on the short side (1080x1920 for vertical ads, the size ad
+//    platforms ask for). Converting 4K phone footage at full size needs over 1.2 GB of memory and several
+//    minutes, which crashes or times out a serverless function. Downscaling first halves the time and memory.
 //  - Output is always .mp4.
 // Images: re-encoded with sharp, which drops EXIF, XMP, IPTC and text chunks (where AI tools store prompts).
 //         The color profile is kept so colors stay accurate. JPEG and WebP are saved at quality 95.
@@ -75,7 +78,7 @@ export const probeVideo = async (path: string): Promise<VideoInfo> => {
   );
   const lines = stderr.split('\n');
   const videoLine = lines.find((l) => /Stream #\d+:\d+.*: Video: /.test(l) && !l.includes('(attached pic)'));
-  if (!videoLine) throw new Error('no video stream found');
+  if (!videoLine) throw new ProcessingError('unreadable', 'no video stream found');
   const audioLine = lines.find((l) => /Stream #\d+:\d+.*: Audio: /.test(l));
 
   const parts = splitTop(videoLine.split(': Video: ')[1]);
@@ -125,9 +128,26 @@ const STRIP_ARGS = [
   '-movflags', '+faststart',
 ];
 
+// Short side at most 1080 px, aspect ratio kept. Runs before tone mapping so the expensive steps work on fewer pixels.
+const MAX_SHORT_SIDE = 1080;
+const DOWNSCALE = `scale=w='if(gt(iw,ih),-2,min(${MAX_SHORT_SIDE},iw))':h='if(gt(iw,ih),min(${MAX_SHORT_SIDE},ih),-2)':flags=lanczos`;
+
 // HDR (PQ or HLG) to standard range, Rec. 709, 8-bit 4:2:0.
 const TONEMAP =
   'zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p';
+
+/** Seconds ffmpeg may run. Leaves time to upload the result inside the function's 300 seconds. */
+const CONVERT_TIMEOUT_MS = 230_000;
+
+/** A failure the dashboard can explain, as opposed to a crash. */
+export class ProcessingError extends Error {
+  constructor(
+    public code: 'conversion_timeout' | 'conversion_failed' | 'unreadable',
+    public reason: string,
+  ) {
+    super(`${code}: ${reason}`);
+  }
+}
 
 export type VideoResult = { leftovers: string[]; converted: boolean; source: string; width: number; height: number };
 
@@ -141,23 +161,31 @@ export const stripVideo = async (input: string, output: string): Promise<VideoRe
   if (safe) {
     args.push('-c:v', 'copy');
   } else {
-    const pixels = info.width * info.height;
     args.push(
       '-c:v', 'libx264',
-      '-preset', pixels > 2_200_000 ? 'veryfast' : 'fast',
-      '-crf', '17',
+      '-preset', 'veryfast',
+      '-crf', '16',
       '-profile:v', 'high',
-      '-vf', info.hdr ? TONEMAP : 'format=yuv420p',
+      // Fewer threads and a shorter look-ahead keep memory well under the function's limit.
+      '-threads', '2', '-filter_threads', '2', '-x264-params', 'rc-lookahead=20',
+      '-vf', `${DOWNSCALE},${info.hdr ? TONEMAP : 'format=yuv420p'}`,
       '-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709',
     );
   }
   args.push(...(audioOk ? ['-c:a', 'copy'] : ['-c:a', 'aac', '-b:a', '192k']));
   args.push(...STRIP_ARGS, output);
 
-  await run(ffmpeg(), args, { timeout: 280_000, maxBuffer: 4 * 1024 * 1024 });
+  try {
+    await run(ffmpeg(), args, { timeout: CONVERT_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, killSignal: 'SIGKILL' });
+  } catch (error) {
+    const e = error as { killed?: boolean; stderr?: string; message: string };
+    if (e.killed) throw new ProcessingError('conversion_timeout', `took longer than ${CONVERT_TIMEOUT_MS / 1000} seconds`);
+    const reason = (e.stderr ?? e.message).trim().split('\n').pop() ?? 'ffmpeg failed';
+    throw new ProcessingError('conversion_failed', reason.slice(0, 200));
+  }
 
   const out = await probeVideo(output);
-  if (!isBrowserSafe(out)) throw new Error(`conversion produced ${describeVideo(out)}`);
+  if (!isBrowserSafe(out)) throw new ProcessingError('conversion_failed', `produced ${describeVideo(out)}`);
   return {
     leftovers: await leftoverVideoMetadata(output),
     converted: !safe,
