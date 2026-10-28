@@ -20,7 +20,7 @@
   "rewrites": [
     {
       "source": "/c/:id",
-      "destination": "/client.html"
+      "destination": "/client"
     }
   ],
   "headers": [
