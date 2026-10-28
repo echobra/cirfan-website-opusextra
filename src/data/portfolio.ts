@@ -190,6 +190,23 @@ export const portfolio: PortfolioItem[] = [
     published: '2026-10-26',
     featured: false,
   },
+  {
+    slug: 'microsoft',
+    title: 'Microsoft',
+    style: 'Cinematic',
+    summary: 'An animated 9:16 RAM advertisement.',
+    media: {
+      kind: 'video',
+      src: '/portfolio/microsoft-ad-demo-v1.mp4',
+      poster: '/portfolio/microsoft-ad-demo-v1.webp',
+      width: 608,
+      height: 1080,
+      seconds: 10,
+      hookSeconds: 1,
+    },
+    published: '2026-10-28',
+    featured: false,
+  },
 ];
 
 export const featured = portfolio.filter((item) => item.featured).slice(0, 2);
