@@ -194,7 +194,7 @@ export const portfolio: PortfolioItem[] = [
     slug: 'microsoft',
     title: 'Microsoft',
     style: 'Cinematic',
-    summary: 'An animated 9:16 RAM advertisement.',
+    summary: 'A formal, cinematic 9:16 commercial for Microsoft.',
     media: {
       kind: 'video',
       src: '/portfolio/microsoft-ad-demo-v1.mp4',
